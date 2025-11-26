@@ -356,59 +356,79 @@ install_sigilderg_components() {
     "$PIP_CMD" install jsonlines>=4.0.0 || error_exit "Failed to install jsonlines"
     log_success "jsonlines installed"
     
-    # Install human-eval-rust (with fallback to GitHub if PyPI not available)
+    # Install human-eval-rust (with fallback to GitHub if PyPI not available or has syntax errors)
     log_info "Installing human-eval-rust (requires >=1.3.2 for H100 optimizations: 4GB memory, 24 workers, 10s timeout, circular import fix)..."
     # Uninstall old version first to ensure clean install
     "$PIP_CMD" uninstall -y human-eval-rust 2>/dev/null || true
     # Force reinstall with version constraint to get H100 optimizations (1.3.2+)
+    PYPI_INSTALL_SUCCESS=false
     if "$PIP_CMD" install --force-reinstall --no-cache-dir "human-eval-rust>=1.3.2" 2>&1 | tee -a setup.log; then
-        # Verify installation by checking version (more reliable than import check)
+        PYPI_INSTALL_SUCCESS=true
         # Small delay to ensure package metadata is fully written
         sleep 2
-        # Try multiple methods to get version
-        # First try: Python import (suppress stderr to avoid capturing syntax errors)
-        PYTHON_VERSION_OUTPUT=$("$VENV_DIR/bin/python" -c "import human_eval; print(getattr(human_eval, '__version__', 'unknown'))" 2>/dev/null || echo "unknown")
-        # Filter out error messages - only accept strings that look like version numbers
-        if [[ "$PYTHON_VERSION_OUTPUT" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\+)?$ ]]; then
-            INSTALLED_VERSION="$PYTHON_VERSION_OUTPUT"
-        else
-            INSTALLED_VERSION="unknown"
-        fi
-        # If that failed, try checking pip show
-        if [[ "$INSTALLED_VERSION" == "unknown" ]] || [[ -z "$INSTALLED_VERSION" ]]; then
-            PIP_VERSION=$("$PIP_CMD" show human-eval-rust 2>/dev/null | grep "^Version:" | awk '{print $2}' || echo "unknown")
-            if [[ "$PIP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\+)?$ ]]; then
-                INSTALLED_VERSION="$PIP_VERSION"
-            fi
-        fi
-        # If still unknown, check if import works at all
-        if [[ "$INSTALLED_VERSION" == "unknown" ]] || [[ -z "$INSTALLED_VERSION" ]]; then
-            if "$VENV_DIR/bin/python" -c "import human_eval" 2>/dev/null; then
-                # Import works, version might just not be accessible, assume it's the installed version
-                INSTALLED_VERSION="1.3.2+"
-                log_info "Package imports successfully, assuming version >=1.3.2 from PyPI"
-            fi
-        fi
         
-        if [[ "$INSTALLED_VERSION" != "unknown" ]] && [[ -n "$INSTALLED_VERSION" ]]; then
-            log_success "human-eval-rust installed from PyPI (version: $INSTALLED_VERSION)"
-            # Verify it's the correct version (allow 1.3.2+ format)
-            if [[ "$INSTALLED_VERSION" != "1.3.2" ]] && [[ "$INSTALLED_VERSION" != "1.3.2+" ]] && [[ ! "$INSTALLED_VERSION" =~ ^1\.3\.[2-9] ]]; then
-                log_warning "Installed version $INSTALLED_VERSION may not have the latest fixes (expected >=1.3.2)"
-            fi
+        # CRITICAL: Validate that the package can actually be imported (catches syntax errors)
+        log_info "Validating installation (checking for syntax errors)..."
+        if ! "$VENV_DIR/bin/python" -c "import human_eval; from human_eval.data import read_problems, get_human_eval_dataset" 2>&1 | tee -a setup.log; then
+            log_warning "PyPI package installed but has syntax/import errors. Falling back to GitHub..."
+            "$PIP_CMD" uninstall -y human-eval-rust 2>/dev/null || true
+            PYPI_INSTALL_SUCCESS=false
         else
-            # Version check failed, but PyPI install succeeded - likely just a version detection issue
-            # Don't fall back to GitHub since PyPI install worked
-            log_warning "PyPI package installed successfully but version check inconclusive"
-            log_info "Assuming version >=1.3.2 from PyPI installation (package installed successfully)"
-            log_success "human-eval-rust installed from PyPI (version check inconclusive, but installation succeeded)"
+            # Verify installation by checking version (more reliable than import check)
+            # Try multiple methods to get version
+            # First try: Python import (suppress stderr to avoid capturing syntax errors)
+            PYTHON_VERSION_OUTPUT=$("$VENV_DIR/bin/python" -c "import human_eval; print(getattr(human_eval, '__version__', 'unknown'))" 2>/dev/null || echo "unknown")
+            # Filter out error messages - only accept strings that look like version numbers
+            if [[ "$PYTHON_VERSION_OUTPUT" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\+)?$ ]]; then
+                INSTALLED_VERSION="$PYTHON_VERSION_OUTPUT"
+            else
+                INSTALLED_VERSION="unknown"
+            fi
+            # If that failed, try checking pip show
+            if [[ "$INSTALLED_VERSION" == "unknown" ]] || [[ -z "$INSTALLED_VERSION" ]]; then
+                PIP_VERSION=$("$PIP_CMD" show human-eval-rust 2>/dev/null | grep "^Version:" | awk '{print $2}' || echo "unknown")
+                if [[ "$PIP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\+)?$ ]]; then
+                    INSTALLED_VERSION="$PIP_VERSION"
+                fi
+            fi
+            # If still unknown, check if import works at all
+            if [[ "$INSTALLED_VERSION" == "unknown" ]] || [[ -z "$INSTALLED_VERSION" ]]; then
+                if "$VENV_DIR/bin/python" -c "import human_eval" 2>/dev/null; then
+                    # Import works, version might just not be accessible, assume it's the installed version
+                    INSTALLED_VERSION="1.3.2+"
+                    log_info "Package imports successfully, assuming version >=1.3.2 from PyPI"
+                fi
+            fi
+            
+            if [[ "$INSTALLED_VERSION" != "unknown" ]] && [[ -n "$INSTALLED_VERSION" ]]; then
+                log_success "human-eval-rust installed from PyPI (version: $INSTALLED_VERSION)"
+                # Verify it's the correct version (allow 1.3.2+ format)
+                if [[ "$INSTALLED_VERSION" != "1.3.2" ]] && [[ "$INSTALLED_VERSION" != "1.3.2+" ]] && [[ ! "$INSTALLED_VERSION" =~ ^1\.3\.[2-9] ]]; then
+                    log_warning "Installed version $INSTALLED_VERSION may not have the latest fixes (expected >=1.3.2)"
+                fi
+            else
+                # Version check failed, but PyPI install succeeded - likely just a version detection issue
+                log_warning "PyPI package installed successfully but version check inconclusive"
+                log_info "Assuming version >=1.3.2 from PyPI installation (package installed successfully)"
+                log_success "human-eval-rust installed from PyPI (version check inconclusive, but installation succeeded)"
+            fi
         fi
-    else
-        log_warning "PyPI installation failed, trying GitHub fallback..."
+    fi
+    
+    # Fallback to GitHub if PyPI install failed or had syntax errors
+    if [ "$PYPI_INSTALL_SUCCESS" = false ]; then
+        log_warning "PyPI installation failed or had errors, trying GitHub fallback..."
         "$PIP_CMD" install --no-cache-dir git+https://github.com/Superuser666-Sigil/human-eval-Rust.git@main \
             || error_exit "Failed to install human-eval-rust from PyPI or GitHub"
-        # Verify GitHub installation version
+        
+        # Validate GitHub installation
         sleep 2
+        log_info "Validating GitHub installation (checking for syntax errors)..."
+        if ! "$VENV_DIR/bin/python" -c "import human_eval; from human_eval.data import read_problems, get_human_eval_dataset" 2>&1 | tee -a setup.log; then
+            error_exit "GitHub installation also has syntax/import errors. Please check the human-eval-Rust repository."
+        fi
+        
+        # Verify GitHub installation version
         PYTHON_VERSION_OUTPUT=$("$VENV_DIR/bin/python" -c "import human_eval; print(getattr(human_eval, '__version__', 'unknown'))" 2>/dev/null || echo "unknown")
         # Filter out error messages - only accept strings that look like version numbers
         if [[ "$PYTHON_VERSION_OUTPUT" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\+)?$ ]]; then
