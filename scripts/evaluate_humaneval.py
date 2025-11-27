@@ -219,8 +219,23 @@ def generate_samples_for_model(
                     **load_kwargs
                 )
             except OSError as e:
+                # If loading fails with safetensors error, try without safetensors
+                if "safetensors" in str(e).lower():
+                    print(f"Warning: SafeTensors not available: {e}")
+                    print("Retrying with PyTorch format (use_safetensors=False)...")
+                    load_kwargs_no_safe = load_kwargs.copy()
+                    load_kwargs_no_safe["use_safetensors"] = False
+                    try:
+                        model = AutoPeftModelForCausalLM.from_pretrained(
+                            actual_model_path,
+                            **load_kwargs_no_safe
+                        )
+                        print("✓ Successfully loaded model using PyTorch format")
+                    except Exception as e2:
+                        print(f"ERROR: Failed to load model even without safetensors: {e2}")
+                        raise e  # Re-raise original error
                 # If loading fails with TensorFlow error, try loading base model explicitly
-                if "TensorFlow" in str(e) or "from_tf" in str(e):
+                elif "TensorFlow" in str(e) or "from_tf" in str(e):
                     print(f"Warning: Encountered TensorFlow weights issue: {e}")
                     print("Attempting to load base model explicitly, then applying PEFT adapter...")
                     try:
@@ -235,15 +250,31 @@ def generate_samples_for_model(
                         print(f"Loading base model from: {base_model_path}")
                         
                         # Load base model explicitly with PyTorch weights only
-                        base_model = AutoModelForCausalLM.from_pretrained(
-                            base_model_path,
-                            dtype=torch.bfloat16,
-                            device_map="auto",
-                            trust_remote_code=True,
-                            attn_implementation=attn_implementation,
-                            from_tf=False,
-                            use_safetensors=True,
-                        )
+                        # Try safetensors first, fall back to PyTorch if not available
+                        try:
+                            base_model = AutoModelForCausalLM.from_pretrained(
+                                base_model_path,
+                                dtype=torch.bfloat16,
+                                device_map="auto",
+                                trust_remote_code=True,
+                                attn_implementation=attn_implementation,
+                                from_tf=False,
+                                use_safetensors=True,
+                            )
+                        except OSError as safetensors_error:
+                            if "safetensors" in str(safetensors_error).lower():
+                                print(f"Warning: Base model doesn't have safetensors, using PyTorch format")
+                                base_model = AutoModelForCausalLM.from_pretrained(
+                                    base_model_path,
+                                    dtype=torch.bfloat16,
+                                    device_map="auto",
+                                    trust_remote_code=True,
+                                    attn_implementation=attn_implementation,
+                                    from_tf=False,
+                                    use_safetensors=False,
+                                )
+                            else:
+                                raise
                         
                         # Then load PEFT adapter
                         if checkpoint_subfolder:
@@ -264,15 +295,33 @@ def generate_samples_for_model(
                 else:
                     raise
         else:
-            model = AutoModelForCausalLM.from_pretrained(
-                model_path,
-                dtype=torch.bfloat16,
-                device_map="auto",
-                trust_remote_code=True,
-                attn_implementation=attn_implementation,
-                from_tf=False,  # Explicitly prevent TensorFlow loading
-                use_safetensors=True,  # Prefer SafeTensors format
-            )
+            # Try safetensors first, fall back to PyTorch if not available
+            try:
+                model = AutoModelForCausalLM.from_pretrained(
+                    model_path,
+                    dtype=torch.bfloat16,
+                    device_map="auto",
+                    trust_remote_code=True,
+                    attn_implementation=attn_implementation,
+                    from_tf=False,  # Explicitly prevent TensorFlow loading
+                    use_safetensors=True,  # Prefer SafeTensors format
+                )
+            except OSError as e:
+                if "safetensors" in str(e).lower():
+                    print(f"Warning: SafeTensors not available: {e}")
+                    print("Retrying with PyTorch format (use_safetensors=False)...")
+                    model = AutoModelForCausalLM.from_pretrained(
+                        model_path,
+                        dtype=torch.bfloat16,
+                        device_map="auto",
+                        trust_remote_code=True,
+                        attn_implementation=attn_implementation,
+                        from_tf=False,
+                        use_safetensors=False,
+                    )
+                    print("✓ Successfully loaded model using PyTorch format")
+                else:
+                    raise
     except Exception as e:
         print(f"ERROR: Failed to load model: {e}")
         print(f"Model path: {model_path}")
