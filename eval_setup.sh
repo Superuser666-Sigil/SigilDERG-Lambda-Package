@@ -1,6 +1,6 @@
 #!/bin/bash
 # Complete HumanEval Rust Evaluation Setup and Execution Script
-# Version: 1.3.4
+# Version: 1.3.5
 # 
 # This script:
 # 1) Provisions a reproducible Python + Rust + GPU environment
@@ -357,12 +357,12 @@ install_sigilderg_components() {
     log_success "jsonlines installed"
     
     # Install human-eval-rust (with fallback to GitHub if PyPI not available or has syntax errors)
-    log_info "Installing human-eval-rust (requires >=1.3.4 for H100 optimizations and sandbox detection fix: 4GB memory, 24 workers, 10s timeout, circular import fix, f-string syntax fix, sandbox auto-detect)..."
+    log_info "Installing human-eval-rust (requires >=1.3.5 for H100 optimizations, sandbox detection fix, and main() function removal fix: 4GB memory, 24 workers, 10s timeout, circular import fix, f-string syntax fix, sandbox auto-detect, main() regex fix)..."
     # Uninstall old version first to ensure clean install
     "$PIP_CMD" uninstall -y human-eval-rust 2>/dev/null || true
-    # Force reinstall with version constraint to get H100 optimizations and fixes (1.3.4+)
+    # Force reinstall with version constraint to get H100 optimizations and fixes (1.3.5+)
     PYPI_INSTALL_SUCCESS=false
-    if "$PIP_CMD" install --force-reinstall --no-cache-dir "human-eval-rust>=1.3.4" 2>&1 | tee -a setup.log; then
+    if "$PIP_CMD" install --force-reinstall --no-cache-dir "human-eval-rust>=1.3.5" 2>&1 | tee -a setup.log; then
         PYPI_INSTALL_SUCCESS=true
         # Small delay to ensure package metadata is fully written
         sleep 2
@@ -395,21 +395,21 @@ install_sigilderg_components() {
             if [[ "$INSTALLED_VERSION" == "unknown" ]] || [[ -z "$INSTALLED_VERSION" ]]; then
                 if "$VENV_DIR/bin/python" -c "import human_eval" 2>/dev/null; then
                     # Import works, version might just not be accessible, assume it's the installed version
-                    INSTALLED_VERSION="1.3.4+"
-                    log_info "Package imports successfully, assuming version >=1.3.4 from PyPI"
+                    INSTALLED_VERSION="1.3.5+"
+                    log_info "Package imports successfully, assuming version >=1.3.5 from PyPI"
                 fi
             fi
             
             if [[ "$INSTALLED_VERSION" != "unknown" ]] && [[ -n "$INSTALLED_VERSION" ]]; then
                 log_success "human-eval-rust installed from PyPI (version: $INSTALLED_VERSION)"
-                # Verify it's the correct version (allow 1.3.4+ format)
-                if [[ "$INSTALLED_VERSION" != "1.3.4" ]] && [[ "$INSTALLED_VERSION" != "1.3.4+" ]] && [[ ! "$INSTALLED_VERSION" =~ ^1\.3\.[4-9] ]]; then
-                    log_warning "Installed version $INSTALLED_VERSION may not have the latest fixes (expected >=1.3.4)"
+                # Verify it's the correct version (allow 1.3.5+ format)
+                if [[ "$INSTALLED_VERSION" != "1.3.5" ]] && [[ "$INSTALLED_VERSION" != "1.3.5+" ]] && [[ ! "$INSTALLED_VERSION" =~ ^1\.3\.[5-9] ]]; then
+                    log_warning "Installed version $INSTALLED_VERSION may not have the latest fixes (expected >=1.3.5)"
                 fi
             else
                 # Version check failed, but PyPI install succeeded - likely just a version detection issue
                 log_warning "PyPI package installed successfully but version check inconclusive"
-                log_info "Assuming version >=1.3.4 from PyPI installation (package installed successfully)"
+                log_info "Assuming version >=1.3.5 from PyPI installation (package installed successfully)"
                 log_success "human-eval-rust installed from PyPI (version check inconclusive, but installation succeeded)"
             fi
         fi
@@ -442,9 +442,9 @@ install_sigilderg_components() {
                 GITHUB_VERSION="$PIP_VERSION"
             fi
         fi
-        if [[ "$GITHUB_VERSION" != "1.3.4" ]] && [[ "$GITHUB_VERSION" != "unknown" ]] && [[ -n "$GITHUB_VERSION" ]]; then
-            log_warning "GitHub installation version $GITHUB_VERSION does not match expected 1.3.4"
-            log_warning "This may indicate the GitHub main branch is not up to date. Consider using PyPI version 1.3.4+"
+        if [[ "$GITHUB_VERSION" != "1.3.5" ]] && [[ "$GITHUB_VERSION" != "unknown" ]] && [[ -n "$GITHUB_VERSION" ]]; then
+            log_warning "GitHub installation version $GITHUB_VERSION does not match expected 1.3.5"
+            log_warning "This may indicate the GitHub main branch is not up to date. Consider using PyPI version 1.3.5+"
         fi
         log_success "human-eval-rust installed from GitHub (version: ${GITHUB_VERSION:-unknown})"
         # Note: termcolor>=3.2.0 is already installed in core dependencies and is compatible across all ecosystem components
