@@ -1,9 +1,15 @@
 #!/bin/bash
 # lib/sandbox.sh
-# Docker and Firejail sandbox verification and fallback handling
+#
+# Docker and Firejail sandbox verification and fallback handling.
 #
 # Verifies Docker access, handles permission issues, and provides fallback
 # options (Firejail installation or unsandboxed mode) with user confirmation.
+# Ensures users are always aware of sandboxing status when running untrusted code.
+# Includes retry logic and detailed diagnostics for Docker startup issues.
+#
+# Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
+# Version: 1.3.5
 
 # Source dependencies
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -19,17 +25,34 @@ verify_docker_access() {
         return 1
     fi
     
+    # First check if Docker daemon is running with docker info
+    if ! docker info >/dev/null 2>&1; then
+        DOCKER_ERROR=$(docker info 2>&1)
+        if echo "$DOCKER_ERROR" | grep -q "permission denied\|connect.*docker.sock"; then
+            log_error "Docker permission denied: user does not have access to Docker daemon"
+            log_info "Error details: $DOCKER_ERROR"
+            return 2  # Permission denied
+        else
+            log_warning "Docker daemon not running or not accessible"
+            log_info "Error details: $DOCKER_ERROR"
+            return 1  # Other error (daemon not running)
+        fi
+    fi
+    
     # Test Docker access with a simple command
     if docker ps >/dev/null 2>&1; then
         log_success "Docker access verified (docker ps succeeded)"
         return 0
     else
         # Check if it's a permission issue
-        if docker ps 2>&1 | grep -q "permission denied\|connect.*docker.sock"; then
+        DOCKER_PS_ERROR=$(docker ps 2>&1)
+        if echo "$DOCKER_PS_ERROR" | grep -q "permission denied\|connect.*docker.sock"; then
             log_error "Docker permission denied: user does not have access to Docker daemon"
+            log_info "Error details: $DOCKER_PS_ERROR"
             return 2  # Permission denied
         else
             log_warning "Docker command failed (may not be running or accessible)"
+            log_info "Error details: $DOCKER_PS_ERROR"
             return 1  # Other error
         fi
     fi
@@ -215,9 +238,35 @@ check_docker_with_verification() {
         if command_exists systemctl; then
             log_info "Starting Docker service via systemctl..."
             if sudo systemctl start docker 2>&1 | tee -a setup.log; then
-                # Wait for Docker to start (30 seconds to be safe)
-                sleep 30
+                log_info "Waiting for Docker daemon to start (this may take up to 60 seconds)..."
+                
+                # Wait for Docker to be ready with retries
+                DOCKER_READY=false
+                for i in {1..12}; do
+                    sleep 5
+                    if docker info >/dev/null 2>&1; then
+                        log_success "Docker daemon is now running"
+                        DOCKER_READY=true
+                        break
+                    fi
+                    if [ $i -lt 12 ]; then
+                        log_info "Still waiting for Docker... ($((i*5))s elapsed)"
+                    fi
+                done
+                
+                if [ "$DOCKER_READY" = false ]; then
+                    log_warning "Docker service started but daemon not responding after 60 seconds"
+                    log_info "Checking Docker service status..."
+                    sudo systemctl status docker --no-pager -l | head -20 || true
+                    log_info "You may need to check Docker logs: sudo journalctl -u docker.service"
+                fi
+            else
+                log_warning "Failed to start Docker service via systemctl"
+                log_info "Checking Docker service status..."
+                sudo systemctl status docker --no-pager -l | head -20 || true
             fi
+        else
+            log_warning "systemctl not available, cannot start Docker service automatically"
         fi
     fi
     

@@ -1,7 +1,9 @@
 #!/bin/bash
 # Complete HumanEval Rust Evaluation Setup and Execution Script
-# Version: 1.3.5
-# 
+#
+# Main entry point and orchestration script for HumanEval-Rust evaluation setup.
+# Sources all modular libraries and coordinates the complete setup and evaluation workflow.
+#
 # This script:
 # 1) Provisions a reproducible Python + Rust + GPU environment
 # 2) Installs the SigilDERG ecosystem and human-eval-rust
@@ -10,6 +12,9 @@
 #
 # Optimized for Ubuntu 22.04 Jammy
 # Defaults optimized for 1×H100 with 26 vCPUs (overridable via CLI flags)
+#
+# Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
+# Version: 1.3.5
 
 set -euo pipefail  # Exit on error, undefined vars, pipe failures
 

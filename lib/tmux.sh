@@ -1,9 +1,15 @@
 #!/bin/bash
 # lib/tmux.sh
-# tmux session management for evaluation execution
+#
+# tmux session management for evaluation execution.
 #
 # Manages tmux sessions for persistent evaluation runs that can survive
-# disconnections.
+# disconnections. Creates a detached tmux session with the evaluation script,
+# ensuring Rust environment is properly sourced. Falls back to foreground
+# execution if tmux is not available.
+#
+# Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
+# Version: 1.3.5
 
 # Source dependencies
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

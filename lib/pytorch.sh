@@ -1,8 +1,14 @@
 #!/bin/bash
 # lib/pytorch.sh
-# PyTorch and Flash Attention v2 installation
+#
+# PyTorch and Flash Attention v2 installation.
 #
 # Installs PyTorch with CUDA support and optionally Flash Attention v2 for performance.
+# Detects CUDA version and installs appropriate PyTorch wheel (2.4.0 for CUDA 12.4 or
+# 2.7.1 for CUDA 12.8+). Attempts to install Flash Attention v2 with graceful fallback.
+#
+# Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
+# Version: 1.3.5
 
 # Source dependencies
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

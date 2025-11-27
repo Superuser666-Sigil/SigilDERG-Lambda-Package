@@ -1,9 +1,14 @@
 #!/bin/bash
 # lib/cli_tools.sh
-# CLI tool installation (GitHub CLI, HuggingFace CLI)
 #
-# Installs and authenticates GitHub CLI and HuggingFace CLI for accessing
-# repositories and models.
+# CLI tool installation (GitHub CLI, HuggingFace CLI).
+#
+# Installs and authenticates GitHub CLI (gh) and HuggingFace CLI (hf) for accessing
+# repositories and models. Handles interactive authentication flows and PATH configuration.
+# Skips authentication in NONINTERACTIVE mode with instructions for manual setup.
+#
+# Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
+# Version: 1.3.5
 
 # Source dependencies
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

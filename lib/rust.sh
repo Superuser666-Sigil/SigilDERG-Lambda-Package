@@ -1,8 +1,14 @@
 #!/bin/bash
 # lib/rust.sh
-# Rust toolchain installation
 #
-# Installs Rust via rustup and verifies installation. REQUIRED for evaluation.
+# Rust toolchain installation.
+#
+# Installs Rust via rustup and verifies installation. REQUIRED for evaluation as
+# human-eval-rust needs rustc and cargo to compile and execute Rust code completions.
+# Sources ~/.cargo/env to make rustc available in PATH.
+#
+# Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
+# Version: 1.3.5
 
 # Source dependencies
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

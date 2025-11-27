@@ -1,9 +1,14 @@
 #!/bin/bash
 # lib/environment.sh
-# Environment validation and utility functions
+#
+# Environment validation and utility functions.
 #
 # Provides environment checks (OS, GPU) and utility functions like command_exists
-# for validating the system before proceeding with installation.
+# for validating the system before proceeding with installation. Validates Ubuntu 22.04
+# and NVIDIA H100 GPU requirements, with optional override via SKIP_ENV_CHECK.
+#
+# Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
+# Version: 1.3.5
 
 # Source dependencies
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

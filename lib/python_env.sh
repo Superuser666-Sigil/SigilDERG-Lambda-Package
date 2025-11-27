@@ -1,9 +1,14 @@
 #!/bin/bash
 # lib/python_env.sh
-# Python environment setup (pyenv, Python installation, virtual environment)
+#
+# Python environment setup (pyenv, Python installation, virtual environment).
 #
 # Handles pyenv installation, Python version installation, and virtual environment
-# creation and activation.
+# creation and activation. Manages Python 3.12.11 installation via pyenv and creates
+# the dedicated virtual environment at ~/.venvs/sigilderg-humaneval.
+#
+# Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
+# Version: 1.3.5
 
 # Source dependencies
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

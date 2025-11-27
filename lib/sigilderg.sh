@@ -1,9 +1,14 @@
 #!/bin/bash
 # lib/sigilderg.sh
-# SigilDERG ecosystem component installation
+#
+# SigilDERG ecosystem component installation.
 #
 # Installs core dependencies, human-eval-rust, sigil-pipeline, and sigilderg-finetuner
-# with PyPI fallback to GitHub for reliability.
+# with PyPI fallback to GitHub for reliability. Validates package versions and import
+# functionality to ensure correct installation. Requires human-eval-rust>=1.3.5.
+#
+# Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
+# Version: 1.3.5
 
 # Source dependencies
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

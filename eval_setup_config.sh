@@ -1,10 +1,15 @@
 #!/bin/bash
 # eval_setup_config.sh
-# Configuration and constants for HumanEval Rust evaluation setup
-# Version: 1.3.5
+#
+# Configuration and constants for HumanEval Rust evaluation setup.
 #
 # This file contains all configuration variables and constants used by
 # the evaluation setup scripts. Source this file first before other modules.
+# Provides centralized configuration including colors, paths, versions, and
+# environment variable defaults.
+#
+# Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
+# Version: 1.3.5
 
 # Colors for output
 export RED='\033[0;31m'

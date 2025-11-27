@@ -1,9 +1,14 @@
 #!/bin/bash
 # lib/logging.sh
-# Logging utilities for evaluation setup
+#
+# Logging utilities for evaluation setup.
 #
 # Provides colored logging functions: log_info, log_success, log_warning, log_error
-# and error_exit for consistent output across all modules.
+# and error_exit for consistent output across all modules. All logging functions
+# use colors defined in eval_setup_config.sh for visual clarity.
+#
+# Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
+# Version: 1.3.5
 
 # Source config for colors (if not already sourced)
 if [ -z "${RED:-}" ]; then

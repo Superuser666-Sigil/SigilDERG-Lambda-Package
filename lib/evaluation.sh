@@ -1,9 +1,14 @@
 #!/bin/bash
 # lib/evaluation.sh
-# Evaluation script generation
 #
-# Copies the Python evaluation script from scripts/ to the venv directory
-# and makes it executable.
+# Evaluation script generation.
+#
+# Copies the Python evaluation script from scripts/evaluate_humaneval.py to the venv
+# directory and makes it executable. The Python script handles model loading, sample
+# generation, evaluation, and report generation.
+#
+# Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
+# Version: 1.3.5
 
 # Source dependencies
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

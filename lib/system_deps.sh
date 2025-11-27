@@ -1,8 +1,13 @@
 #!/bin/bash
 # lib/system_deps.sh
-# System dependency installation
 #
-# Installs required system packages for Ubuntu 22.04.
+# System dependency installation.
+#
+# Installs required system packages for Ubuntu 22.04 including build tools,
+# libraries, and utilities needed for Python compilation, Rust toolchain, and tmux.
+#
+# Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
+# Version: 1.3.5
 
 # Source dependencies
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
