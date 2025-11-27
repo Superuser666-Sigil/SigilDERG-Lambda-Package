@@ -530,8 +530,8 @@ def _filter_bad_samples(sample_file: str) -> str:
     total_count = 0
     filtered_file = sample_file + ".filtered"
     
-    # Track samples per problem: {task_id: [kept_samples, all_samples]}
-    problem_samples = defaultdict(lambda: {"kept": [], "all": []})
+    # Track samples per problem: {task_id: {kept: [], all: [], filtered_reasons: {}}}
+    problem_samples = defaultdict(lambda: {"kept": [], "all": [], "filtered_reasons": {}})
     
     # First pass: collect all samples and filter
     with jsonlines.open(sample_file, mode='r') as reader:
@@ -545,19 +545,27 @@ def _filter_bad_samples(sample_file: str) -> str:
             # Filter out empty completions
             if not completion:
                 filtered_count += 1
+                problem_samples[task_id]["filtered_reasons"] = problem_samples[task_id].get("filtered_reasons", {})
+                problem_samples[task_id]["filtered_reasons"]["empty"] = problem_samples[task_id]["filtered_reasons"].get("empty", 0) + 1
                 continue
             
-            # Filter out very short completions (<20 chars) - likely incomplete
-            if len(completion) < 20:
+            # Filter out very short completions (<10 chars) - likely incomplete
+            # Reduced from 20 to 10 to allow for simple but valid functions
+            if len(completion) < 10:
                 filtered_count += 1
+                problem_samples[task_id]["filtered_reasons"] = problem_samples[task_id].get("filtered_reasons", {})
+                problem_samples[task_id]["filtered_reasons"]["short"] = problem_samples[task_id]["filtered_reasons"].get("short", 0) + 1
                 continue
             
-            # Filter out completions with severe brace mismatches (>2 difference)
+            # Filter out completions with severe brace mismatches (>3 difference)
             # This catches obviously incomplete/truncated code
+            # Relaxed from >2 to >3 to be less strict
             open_braces = completion.count('{')
             close_braces = completion.count('}')
-            if abs(open_braces - close_braces) > 2:
+            if abs(open_braces - close_braces) > 3:
                 filtered_count += 1
+                problem_samples[task_id]["filtered_reasons"] = problem_samples[task_id].get("filtered_reasons", {})
+                problem_samples[task_id]["filtered_reasons"]["braces"] = problem_samples[task_id]["filtered_reasons"].get("braces", 0) + 1
                 continue
             
             # Keep the sample
@@ -573,7 +581,9 @@ def _filter_bad_samples(sample_file: str) -> str:
                 # No samples passed filter - keep the first one anyway to satisfy evaluation requirement
                 if len(all_samples) > 0:
                     writer.write(all_samples[0])
-                    print(f"  WARNING: All samples for {task_id} were filtered, keeping first sample anyway")
+                    reasons = problem_samples[task_id].get("filtered_reasons", {})
+                    reason_str = ", ".join([f"{k}:{v}" for k, v in reasons.items()]) if reasons else "unknown"
+                    print(f"  WARNING: All samples for {task_id} were filtered ({reason_str}), keeping first sample anyway")
             else:
                 # Write all kept samples
                 for sample in kept:
