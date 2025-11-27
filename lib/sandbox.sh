@@ -239,43 +239,73 @@ check_docker_with_verification() {
         return $FALLBACK_RESULT
     fi
     
-    # Check if Docker daemon is running
+    # Check if Docker daemon is running (check service status first, then permissions)
+    DOCKER_SERVICE_RUNNING=false
+    if command_exists systemctl; then
+        if systemctl is-active --quiet docker 2>/dev/null; then
+            DOCKER_SERVICE_RUNNING=true
+            log_info "Docker service is running"
+        fi
+    fi
+    
+    # Check if we can access Docker (this checks both daemon and permissions)
     if ! docker info >/dev/null 2>&1; then
-        log_warning "Docker is installed but not running. Attempting to start Docker..."
-        
-        # Try to start Docker service (systemd)
-        if command_exists systemctl; then
-            log_info "Starting Docker service via systemctl..."
-            if sudo systemctl start docker 2>&1 | tee -a setup.log; then
-                log_info "Waiting for Docker daemon to start (this may take up to 60 seconds)..."
-                
-                # Wait for Docker to be ready with retries
-                DOCKER_READY=false
-                for i in {1..12}; do
-                    sleep 5
-                    if docker info >/dev/null 2>&1; then
-                        log_success "Docker daemon is now running"
-                        DOCKER_READY=true
-                        break
+        if [ "$DOCKER_SERVICE_RUNNING" = true ]; then
+            # Service is running but we can't access it - this is a permission issue
+            log_warning "Docker service is running but access denied (permission issue)"
+            # Skip trying to start Docker, go straight to permission handling
+        else
+            # Service is not running - try to start it
+            log_warning "Docker service is not running. Attempting to start Docker..."
+            
+            if command_exists systemctl; then
+                log_info "Starting Docker service via systemctl..."
+                if sudo systemctl start docker 2>&1 | tee -a setup.log; then
+                    log_info "Waiting for Docker daemon to start (this may take up to 60 seconds)..."
+                    
+                    # Wait for Docker to be ready with retries
+                    DOCKER_READY=false
+                    for i in {1..12}; do
+                        sleep 5
+                        # Check service status first
+                        if systemctl is-active --quiet docker 2>/dev/null; then
+                            # Service is running, now check if we can access it
+                            if docker info >/dev/null 2>&1; then
+                                log_success "Docker daemon is now running and accessible"
+                                DOCKER_READY=true
+                                break
+                            else
+                                # Service running but no access - permission issue
+                                log_warning "Docker service is running but access denied (permission issue)"
+                                DOCKER_READY=false
+                                break
+                            fi
+                        fi
+                        if [ $i -lt 12 ]; then
+                            log_info "Still waiting for Docker service to start... ($((i*5))s elapsed)"
+                        fi
+                    done
+                    
+                    if [ "$DOCKER_READY" = false ]; then
+                        if systemctl is-active --quiet docker 2>/dev/null; then
+                            log_warning "Docker service is running but not accessible (likely permission issue)"
+                            log_info "Checking Docker service status..."
+                            sudo systemctl status docker --no-pager -l | head -20 || true
+                        else
+                            log_warning "Docker service failed to start after 60 seconds"
+                            log_info "Checking Docker service status..."
+                            sudo systemctl status docker --no-pager -l | head -20 || true
+                            log_info "You may need to check Docker logs: sudo journalctl -u docker.service"
+                        fi
                     fi
-                    if [ $i -lt 12 ]; then
-                        log_info "Still waiting for Docker... ($((i*5))s elapsed)"
-                    fi
-                done
-                
-                if [ "$DOCKER_READY" = false ]; then
-                    log_warning "Docker service started but daemon not responding after 60 seconds"
+                else
+                    log_warning "Failed to start Docker service via systemctl"
                     log_info "Checking Docker service status..."
                     sudo systemctl status docker --no-pager -l | head -20 || true
-                    log_info "You may need to check Docker logs: sudo journalctl -u docker.service"
                 fi
             else
-                log_warning "Failed to start Docker service via systemctl"
-                log_info "Checking Docker service status..."
-                sudo systemctl status docker --no-pager -l | head -20 || true
+                log_warning "systemctl not available, cannot start Docker service automatically"
             fi
-        else
-            log_warning "systemctl not available, cannot start Docker service automatically"
         fi
     fi
     
