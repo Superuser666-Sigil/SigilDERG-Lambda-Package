@@ -3,7 +3,7 @@
 #
 # Main entry point and orchestration script for HumanEval-Rust evaluation setup.
 # Sources all modular libraries and coordinates the complete setup and evaluation workflow.
-#
+# 
 # This script:
 # 1) Provisions a reproducible Python + Rust + GPU environment
 # 2) Installs the SigilDERG ecosystem and human-eval-rust
@@ -84,16 +84,27 @@ main() {
         install_rust || ERRORS+=("Rust installation (REQUIRED)")
     } 2>&1 | tee -a setup.log
     
+    DOCKER_CHECK_EXIT=0
     {
-        check_docker_with_verification || {
-            if [ -z "${SANDBOX_MODE:-}" ]; then
-                # If user didn't choose a fallback, this is an error
-                ERRORS+=("Docker verification failed and no sandbox fallback selected")
-            else
-                WARNINGS+=("Docker check - using ${SANDBOX_MODE} as fallback")
-            fi
-        }
+        check_docker_with_verification
+        DOCKER_CHECK_EXIT=$?
     } 2>&1 | tee -a setup.log
+    
+    # Check exit code after the subshell completes
+    if [ $DOCKER_CHECK_EXIT -eq 2 ]; then
+        # Exit code 2 means user chose to stop (option 3)
+        log_info ""
+        log_info "Setup stopped by user request."
+        log_info "Fix Docker permissions and re-run the script when ready."
+        exit 1
+    elif [ $DOCKER_CHECK_EXIT -ne 0 ]; then
+        if [ -z "${SANDBOX_MODE:-}" ]; then
+            # If user didn't choose a fallback, this is an error
+            ERRORS+=("Docker verification failed and no sandbox fallback selected")
+        else
+            WARNINGS+=("Docker check - using ${SANDBOX_MODE} as fallback")
+        fi
+    fi
     
     {
         check_tmux || WARNINGS+=("tmux check")

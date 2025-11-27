@@ -115,6 +115,7 @@ check_firejail() {
 }
 
 # Handle sandbox mode selection when Docker fails
+# Returns: 0 on success, 1 on other error, 2 on user-requested stop
 handle_sandbox_fallback() {
     log_error "==================================================================="
     log_error "CRITICAL: Docker access verification failed!"
@@ -207,7 +208,10 @@ handle_sandbox_fallback() {
                 log_info "  docker ps  # verify it works"
                 log_info ""
                 log_info "Then re-run this script."
-                exit 0
+                log_info ""
+                log_info "Exiting setup script..."
+                # Return 2 to indicate user-requested stop (will be handled by caller)
+                return 2
                 ;;
             *)
                 log_warning "Invalid choice. Please enter 1, 2, or 3."
@@ -227,7 +231,12 @@ check_docker_with_verification() {
         log_info "  curl -fsSL https://get.docker.com -o get-docker.sh"
         log_info "  sudo sh get-docker.sh"
         handle_sandbox_fallback
-        return $?
+        FALLBACK_RESULT=$?
+        if [ $FALLBACK_RESULT -eq 2 ]; then
+            # User requested stop (option 3)
+            return 2
+        fi
+        return $FALLBACK_RESULT
     fi
     
     # Check if Docker daemon is running
