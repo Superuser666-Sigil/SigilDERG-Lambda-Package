@@ -334,6 +334,9 @@ def generate_samples_for_model(
     
     samples = []
     
+    # Track which problems have been successfully generated (for validation)
+    problems_with_samples = set()
+    
     # Use jsonlines writer for efficient batched writes
     with jsonlines.open(output_file, mode='w') as writer:
         with torch.no_grad():
@@ -390,6 +393,9 @@ def generate_samples_for_model(
                     # Write entire batch at once (more efficient than per-sample)
                     writer.write_all(batch_samples)
                     samples.extend(batch_samples)
+                    # Track which problems got samples
+                    for sample in batch_samples:
+                        problems_with_samples.add(sample["task_id"])
                     
                 except Exception as e:
                     print(f"  WARNING: Failed to generate batch starting at {batch_start}: {e}")
@@ -418,6 +424,7 @@ def generate_samples_for_model(
                             
                             sample = {"task_id": task_id, "completion": completion}
                             samples.append(sample)
+                            problems_with_samples.add(task_id)
                             
                             # Write individual sample (fallback path) - append mode
                             with jsonlines.open(output_file, mode='a') as writer_single:
@@ -431,29 +438,60 @@ def generate_samples_for_model(
                 if current % (batch_size * 5) == 0 or current == total_tasks:
                     print(f"  Generated {current}/{total_tasks} samples ({current/total_tasks*100:.1f}%)")
     
+    # Validate that all problems have at least one sample
+    all_problem_ids = set(problems.keys())
+    missing_problems = all_problem_ids - problems_with_samples
+    if missing_problems:
+        print(f"\n⚠ WARNING: {len(missing_problems)} problems have no samples generated:")
+        for task_id in sorted(missing_problems)[:10]:  # Show first 10
+            print(f"    - {task_id}")
+        if len(missing_problems) > 10:
+            print(f"    ... and {len(missing_problems) - 10} more")
+        print("  Adding placeholder samples for these problems...")
+        
+        # Add placeholder samples for missing problems
+        with jsonlines.open(output_file, mode='a') as writer:
+            for task_id in missing_problems:
+                placeholder = {
+                    "task_id": task_id,
+                    "completion": "// Placeholder: generation failed for this problem"
+                }
+                writer.write(placeholder)
+                samples.append(placeholder)
+                problems_with_samples.add(task_id)
+        print(f"  ✓ Added {len(missing_problems)} placeholder samples")
+    
     print(f"\n✓ Generated {len(samples)} samples")
     print(f"✓ Saved to {output_file}")
+    print(f"✓ Coverage: {len(problems_with_samples)}/{len(problems)} problems have samples")
     
     return output_file
 
 def _filter_bad_samples(sample_file: str) -> str:
     """
     Pre-filter obviously bad samples to save evaluation time.
+    Ensures at least one sample per problem remains to satisfy evaluation requirements.
     Returns path to filtered sample file.
     """
     import jsonlines
     import tempfile
+    from collections import defaultdict
     
     filtered_count = 0
     total_count = 0
     filtered_file = sample_file + ".filtered"
     
-    with jsonlines.open(sample_file, mode='r') as reader, \
-         jsonlines.open(filtered_file, mode='w') as writer:
-        
+    # Track samples per problem: {task_id: [kept_samples, all_samples]}
+    problem_samples = defaultdict(lambda: {"kept": [], "all": []})
+    
+    # First pass: collect all samples and filter
+    with jsonlines.open(sample_file, mode='r') as reader:
         for sample in reader:
             total_count += 1
+            task_id = sample.get('task_id')
             completion = sample.get('completion', '').strip()
+            
+            problem_samples[task_id]["all"].append(sample)
             
             # Filter out empty completions
             if not completion:
@@ -474,11 +512,34 @@ def _filter_bad_samples(sample_file: str) -> str:
                 continue
             
             # Keep the sample
-            writer.write(sample)
+            problem_samples[task_id]["kept"].append(sample)
+    
+    # Second pass: write filtered samples, ensuring at least one per problem
+    with jsonlines.open(filtered_file, mode='w') as writer:
+        for task_id in sorted(problem_samples.keys()):
+            kept = problem_samples[task_id]["kept"]
+            all_samples = problem_samples[task_id]["all"]
+            
+            if len(kept) == 0:
+                # No samples passed filter - keep the first one anyway to satisfy evaluation requirement
+                if len(all_samples) > 0:
+                    writer.write(all_samples[0])
+                    print(f"  WARNING: All samples for {task_id} were filtered, keeping first sample anyway")
+            else:
+                # Write all kept samples
+                for sample in kept:
+                    writer.write(sample)
     
     if filtered_count > 0:
         print(f"  Filtered out {filtered_count}/{total_count} obviously bad samples ({filtered_count/total_count*100:.1f}%)")
-        print(f"  Evaluating {total_count - filtered_count} samples")
+        # Count final samples
+        final_count = sum(
+            max(1, len(problem_samples[task_id]["kept"])) 
+            if len(problem_samples[task_id]["kept"]) == 0 and len(problem_samples[task_id]["all"]) > 0
+            else len(problem_samples[task_id]["kept"])
+            for task_id in problem_samples
+        )
+        print(f"  Evaluating {final_count} samples (ensuring at least one per problem)")
     
     return filtered_file if filtered_count > 0 else sample_file
 
