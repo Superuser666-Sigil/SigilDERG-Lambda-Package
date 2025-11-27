@@ -1687,6 +1687,18 @@ if [ -f ~/.bashrc ]; then
     source ~/.bashrc
 fi
 
+# Source Rust environment (required for evaluation)
+if [ -f "\$HOME/.cargo/env" ]; then
+    . "\$HOME/.cargo/env"
+fi
+
+# Verify rustc is available (critical for evaluation)
+if ! command -v rustc >/dev/null 2>&1; then
+    echo "ERROR: rustc not found in PATH. Evaluation cannot proceed."
+    echo "Please ensure Rust is installed and ~/.cargo/env is sourced."
+    exit 1
+fi
+
 # Change to home directory
 cd "\$HOME"
 
