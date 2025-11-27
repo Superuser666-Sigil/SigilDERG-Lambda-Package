@@ -205,9 +205,15 @@ fi
 # Calculate duration and estimated cost
 EVAL_END_TIME=\$(date +%s)
 EVAL_DURATION=\$((EVAL_END_TIME - EVAL_START_TIME))
-EVAL_HOURS=\$(echo "scale=2; \$EVAL_DURATION / 3600" | bc)
+# Calculate hours with 2 decimal places (bash arithmetic)
+EVAL_HOURS_INT=\$((EVAL_DURATION / 3600))
+EVAL_MINUTES=\$((EVAL_DURATION % 3600 / 60))
+EVAL_SECONDS=\$((EVAL_DURATION % 60))
 # H100 SXM5 cost: \$3.29/hr (as of 2025)
-ESTIMATED_COST=\$(echo "scale=2; \$EVAL_HOURS * 3.29" | bc)
+# Calculate cost: (hours * 329 + minutes * 329 / 60 + seconds * 329 / 3600) / 100
+COST_CENTS=\$((EVAL_HOURS_INT * 329 + EVAL_MINUTES * 329 / 60 + EVAL_SECONDS * 329 / 3600))
+ESTIMATED_COST_DOLLARS=\$((COST_CENTS / 100))
+ESTIMATED_COST_CENTS=\$((COST_CENTS % 100))
 
 echo ""
 echo "=========================================="
@@ -228,12 +234,12 @@ if [ \$EXIT_CODE -eq 0 ]; then
     echo "  - setup.log (setup and installation log)"
     echo "  - $OUTPUT_DIR/** (evaluation logs and results)"
     echo ""
-    echo "Duration: \$EVAL_DURATION seconds (\$EVAL_HOURS hours)"
-    echo "Estimated cost (H100 SXM5 @ \$3.29/hr): \$\$ESTIMATED_COST"
+    echo "Duration: \$EVAL_DURATION seconds (\${EVAL_HOURS_INT}h \${EVAL_MINUTES}m \${EVAL_SECONDS}s)"
+    echo "Estimated cost (H100 SXM5 @ \$3.29/hr): \$\${ESTIMATED_COST_DOLLARS}.\$(printf "%02d" \$ESTIMATED_COST_CENTS)"
 else
     echo "Evaluation failed with exit code: \$EXIT_CODE"
     echo ""
-    echo "Duration: \$EVAL_DURATION seconds (\$EVAL_HOURS hours)"
+    echo "Duration: \$EVAL_DURATION seconds (\${EVAL_HOURS_INT}h \${EVAL_MINUTES}m \${EVAL_SECONDS}s)"
     echo "Check logs for details: setup.log, $OUTPUT_DIR/**"
 fi
 echo "=========================================="
