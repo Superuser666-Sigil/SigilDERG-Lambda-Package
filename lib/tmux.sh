@@ -138,6 +138,16 @@ if ! command -v rustc >/dev/null 2>&1; then
     exit 1
 fi
 
+# Activate docker group if user is in docker group (for Docker sandboxing)
+DOCKER_GROUP_ACTIVE=false
+if groups | grep -q docker; then
+    # Test if Docker works with docker group
+    if newgrp docker -c "docker ps >/dev/null 2>&1" 2>/dev/null; then
+        DOCKER_GROUP_ACTIVE=true
+        echo "Docker group detected and verified - Docker sandboxing will be available"
+    fi
+fi
+
 # Change to home directory
 cd "\$HOME"
 
@@ -178,9 +188,15 @@ echo "=========================================="
 echo ""
 
 # Run the evaluation command (already uses venv python explicitly)
-$EVAL_CMD
-
-EXIT_CODE=\$?
+# If docker group is active and sandbox mode is docker, run with newgrp docker
+if [ "\$DOCKER_GROUP_ACTIVE" = "true" ] && [ "${SANDBOX_MODE:-}" = "docker" ]; then
+    echo "Running evaluation with docker group active for Docker sandboxing..."
+    newgrp docker -c "$EVAL_CMD"
+    EXIT_CODE=\$?
+else
+    $EVAL_CMD
+    EXIT_CODE=\$?
+fi
 echo ""
 echo "=========================================="
 if [ \$EXIT_CODE -eq 0 ]; then

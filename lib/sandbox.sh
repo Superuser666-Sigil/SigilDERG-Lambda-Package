@@ -285,25 +285,47 @@ check_docker_with_verification() {
             # Try to fix automatically if possible
             if groups | grep -q docker; then
                 log_warning "User is in docker group but permissions not active in this session"
-                log_info "You may need to run: newgrp docker"
-                log_info "Or log out and log back in for group changes to take effect"
+                log_info "Testing Docker access with newgrp docker..."
+                
+                # Test if Docker works with newgrp (this verifies the group membership is correct)
+                if newgrp docker -c "docker ps >/dev/null 2>&1" 2>/dev/null; then
+                    log_success "Docker access verified with newgrp docker - docker ps succeeded"
+                    log_info "Docker is accessible with docker group. Setting sandbox mode to docker."
+                    log_info "Note: Current shell session may still need 'newgrp docker' for immediate access,"
+                    log_info "but the evaluation will run with docker group active and will have access."
+                    export SANDBOX_MODE="docker"
+                    return 0
+                else
+                    log_warning "Docker still not accessible even with newgrp docker"
+                    log_info "You may need to log out and log back in for group changes to take effect"
+                fi
             else
                 log_info "User is not in docker group. Attempting to add user to docker group..."
                 if sudo usermod -aG docker "$USER" 2>/dev/null; then
                     log_success "User added to docker group"
-                    log_warning "You need to either:"
-                    log_warning "  1) Log out and log back in, OR"
-                    log_warning "  2) Run: newgrp docker"
-                    log_warning ""
-                    log_warning "Then verify with: docker ps"
-                    log_warning ""
-                    log_warning "The script will now prompt you for sandbox fallback options."
+                    log_info "Testing Docker access with newgrp docker..."
+                    
+                    # Test if Docker works with newgrp (this verifies the group membership is correct)
+                    if newgrp docker -c "docker ps >/dev/null 2>&1" 2>/dev/null; then
+                        log_success "Docker access verified with newgrp docker - docker ps succeeded"
+                        log_info "Docker is accessible with docker group. Setting sandbox mode to docker."
+                        log_info "Note: Current shell session may still need 'newgrp docker' for immediate access,"
+                        log_info "but the evaluation will run with docker group active and will have access."
+                        export SANDBOX_MODE="docker"
+                        return 0
+                    else
+                        log_warning "Docker group added but access still not working"
+                        log_warning "You may need to log out and log back in for group changes to take effect"
+                        log_warning "Or run: newgrp docker"
+                        log_warning ""
+                        log_warning "Then verify with: docker ps"
+                    fi
                 else
                     log_warning "Could not automatically add user to docker group"
                 fi
             fi
             
-            # Always prompt for fallback when permission denied
+            # If we get here, Docker access still not working - prompt for fallback
             handle_sandbox_fallback
             return $?
             ;;
