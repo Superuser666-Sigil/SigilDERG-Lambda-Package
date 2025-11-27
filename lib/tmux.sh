@@ -187,6 +187,10 @@ echo "To detach: Press Ctrl+B, then D"
 echo "=========================================="
 echo ""
 
+# Record start time for duration and cost calculation
+EVAL_START_TIME=\$(date +%s)
+echo "Evaluation started at: \$(date)"
+
 # Run the evaluation command (already uses venv python explicitly)
 # If docker group is active and sandbox mode is docker, run with newgrp docker
 if [ "\$DOCKER_GROUP_ACTIVE" = "true" ] && [ "${SANDBOX_MODE:-}" = "docker" ]; then
@@ -197,10 +201,19 @@ else
     $EVAL_CMD
     EXIT_CODE=\$?
 fi
+
+# Calculate duration and estimated cost
+EVAL_END_TIME=\$(date +%s)
+EVAL_DURATION=\$((EVAL_END_TIME - EVAL_START_TIME))
+EVAL_HOURS=\$(echo "scale=2; \$EVAL_DURATION / 3600" | bc)
+# H100 SXM5 cost: \$3.29/hr (as of 2025)
+ESTIMATED_COST=\$(echo "scale=2; \$EVAL_HOURS * 3.29" | bc)
+
 echo ""
 echo "=========================================="
 if [ \$EXIT_CODE -eq 0 ]; then
     echo "Evaluation completed successfully!"
+    echo ""
     echo "Results saved to: $OUTPUT_DIR"
     echo "  - no-policy/ (no policy enforcement)"
     echo "    - comparison_report.md (human-readable)"
@@ -209,8 +222,19 @@ if [ \$EXIT_CODE -eq 0 ]; then
     echo "    - comparison_report.md (human-readable)"
     echo "    - metrics.json (machine-readable)"
     echo "  - combined_summary.md (combined summary of both modes)"
+    echo "  - eval_metadata.json (environment and configuration metadata)"
+    echo ""
+    echo "Logs:"
+    echo "  - setup.log (setup and installation log)"
+    echo "  - $OUTPUT_DIR/** (evaluation logs and results)"
+    echo ""
+    echo "Duration: \$EVAL_DURATION seconds (\$EVAL_HOURS hours)"
+    echo "Estimated cost (H100 SXM5 @ \$3.29/hr): \$\$ESTIMATED_COST"
 else
     echo "Evaluation failed with exit code: \$EXIT_CODE"
+    echo ""
+    echo "Duration: \$EVAL_DURATION seconds (\$EVAL_HOURS hours)"
+    echo "Check logs for details: setup.log, $OUTPUT_DIR/**"
 fi
 echo "=========================================="
 echo ""
