@@ -1,7 +1,29 @@
 
 # HumanEval-Rust Evaluation Setup Script
 
-This script (`eval_setup.sh`) is a self-contained harness for setting up and running the **HumanEval-Rust** benchmark on the SigilDERG Rust QLoRA model and its base model. It’s designed as a **reproducible, H100-targeted evaluation pipeline** that Lambda (or any reviewer) can run end-to-end and get directly comparable results.
+This evaluation harness (`eval_setup.sh` and supporting modules) provides a complete setup and execution pipeline for running the **HumanEval-Rust** benchmark on the SigilDERG Rust QLoRA model and its base model. It's designed as a **reproducible, H100-targeted evaluation pipeline** that Lambda (or any reviewer) can run end-to-end and get directly comparable results.
+
+## Script Structure
+
+The evaluation harness is organized as a modular system for maintainability and clarity:
+
+- **`eval_setup.sh`** - Main entry point and orchestration script (~200 lines)
+- **`eval_setup_config.sh`** - Centralized configuration and constants
+- **`lib/`** - Modular function libraries:
+  - `logging.sh` - Logging utilities
+  - `environment.sh` - Environment validation
+  - `system_deps.sh` - System package installation
+  - `python_env.sh` - Python environment setup (pyenv, venv)
+  - `pytorch.sh` - PyTorch and Flash Attention installation
+  - `sigilderg.sh` - SigilDERG ecosystem component installation
+  - `rust.sh` - Rust toolchain installation
+  - `sandbox.sh` - Docker/Firejail sandbox verification and fallback
+  - `cli_tools.sh` - GitHub and HuggingFace CLI installation
+  - `evaluation.sh` - Evaluation script generation
+  - `tmux.sh` - tmux session management
+- **`scripts/evaluate_humaneval.py`** - Standalone Python evaluation script (extracted from embedded heredoc)
+
+This modular structure provides clear separation of concerns, making the codebase easier to maintain, test, and extend.
 
 ---
 
@@ -60,9 +82,9 @@ At a high level, the script:
    - Adds them to your PATH via `~/.bashrc`.
    - In **interactive mode**, it offers to log you in; in **NONINTERACTIVE** mode, it skips auth and logs how to do it manually later.
 
-8. **Generates the evaluation driver (`evaluate_humaneval.py`)**
+8. **Copies the evaluation driver (`evaluate_humaneval.py`)**
 
-   The script writes a Python file that:
+   The script copies the Python evaluation script from `scripts/evaluate_humaneval.py` to the virtual environment. This Python script:
 
    - Loads both models (configurable via CLI arguments):
      - The **base model** (default: `meta-llama/Meta-Llama-3.1-8B-Instruct`), and  
@@ -133,11 +155,18 @@ This script is deliberately **opinionated** and **narrowly targeted**. The desig
    - The script favors Docker (or firejail) when available to provide isolation.
    - If sandboxing isn’t available, it logs that clearly so reviewers know how code was executed.
 
-5. **Clear separation of concerns**
+5. **Modular architecture with clear separation of concerns**
 
-   - The bash script handles **environment setup** and orchestration.
-   - The generated Python script handles **model loading, sampling, scoring, and reporting**.
-   - This makes it easier for reviewers to inspect or tweak just the evaluation logic without wading through setup details.
+   - The evaluation harness is organized into focused modules, each with a single responsibility:
+     - Configuration, logging, and environment validation
+     - System dependencies, Python environment, and ML libraries
+     - Sandbox verification, CLI tools, and evaluation orchestration
+   - The main bash script (`eval_setup.sh`) handles **environment setup** and orchestration.
+   - The Python script (`scripts/evaluate_humaneval.py`) handles **model loading, sampling, scoring, and reporting**.
+   - This modular structure makes it easier for reviewers to:
+     - Inspect or modify specific components without affecting others
+     - Understand the codebase through focused, single-purpose modules
+     - Test individual components in isolation
 
 6. **Detailed metadata for reviewers**
 

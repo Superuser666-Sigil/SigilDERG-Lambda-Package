@@ -20,12 +20,19 @@ For a comprehensive overview of how these components work together, see the **[S
 
 ## Repository Contents
 
-- **[`eval_setup.sh`](eval_setup.sh)** - Complete setup and evaluation script for HumanEval-Rust benchmarks
+- **[`eval_setup.sh`](eval_setup.sh)** - Main entry point and orchestration script for HumanEval-Rust benchmarks
+- **[`eval_setup_config.sh`](eval_setup_config.sh)** - Centralized configuration and constants
+- **[`lib/`](lib/)** - Modular function libraries for setup and execution:
+  - `logging.sh`, `environment.sh`, `system_deps.sh` - Core utilities and validation
+  - `python_env.sh`, `pytorch.sh`, `sigilderg.sh` - Python and ML environment setup
+  - `rust.sh`, `sandbox.sh`, `cli_tools.sh` - Toolchain and tool installation
+  - `evaluation.sh`, `tmux.sh` - Evaluation execution and session management
+- **[`scripts/evaluate_humaneval.py`](scripts/evaluate_humaneval.py)** - Standalone Python evaluation script
 - **[`eval_setup_readme.md`](eval_setup_readme.md)** - Detailed documentation for the evaluation setup script
 
 ## What This Package Provides
 
-This package provides a **reproducible, H100-targeted evaluation pipeline** that can be run end-to-end to evaluate SigilDERG models on the HumanEval-Rust benchmark. The setup script:
+This package provides a **reproducible, H100-targeted evaluation pipeline** that can be run end-to-end to evaluate SigilDERG models on the HumanEval-Rust benchmark. The evaluation harness is organized as a modular system for maintainability and clarity. The setup script:
 
 - Provisions a reproducible Python + Rust + GPU environment
 - Installs the SigilDERG ecosystem components
