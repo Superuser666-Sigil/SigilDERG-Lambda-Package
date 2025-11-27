@@ -9,7 +9,7 @@
 # Includes retry logic and detailed diagnostics for Docker startup issues.
 #
 # Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
-# Version: 1.3.7
+# Version: 1.3.8
 
 # Source dependencies
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -323,6 +323,67 @@ check_docker_with_verification() {
             
             # Try to fix automatically if possible
             if groups | grep -q docker; then
+                log_warning "User is in docker group but permissions not active in this session"
+                log_info "Testing Docker access with newgrp docker..."
+                
+                # Test if Docker works with newgrp (this verifies the group membership is correct)
+                if newgrp docker -c "docker ps >/dev/null 2>&1" 2>/dev/null; then
+                    log_success "Docker access verified with newgrp docker - docker ps succeeded"
+                    log_info "Docker is accessible with docker group. Setting sandbox mode to docker."
+                    log_info "Note: Current shell session may still need 'newgrp docker' for immediate access,"
+                    log_info "but the evaluation will run with docker group active and will have access."
+                    export SANDBOX_MODE="docker"
+                    return 0
+                else
+                    log_warning "Docker still not accessible even with newgrp docker"
+                    log_info "You may need to log out and log back in for group changes to take effect"
+                fi
+            else
+                log_info "User is not in docker group. Attempting to add user to docker group..."
+                if sudo usermod -aG docker "$USER" 2>/dev/null; then
+                    log_success "User added to docker group"
+                    log_info "Testing Docker access with newgrp docker..."
+                    
+                    # Test if Docker works with newgrp (this verifies the group membership is correct)
+                    if newgrp docker -c "docker ps >/dev/null 2>&1" 2>/dev/null; then
+                        log_success "Docker access verified with newgrp docker - docker ps succeeded"
+                        log_info "Docker is accessible with docker group. Setting sandbox mode to docker."
+                        log_info "Note: Current shell session may still need 'newgrp docker' for immediate access,"
+                        log_info "but the evaluation will run with docker group active and will have access."
+                        export SANDBOX_MODE="docker"
+                        return 0
+                    else
+                        log_warning "Docker group added but access still not working"
+                        log_warning "You may need to log out and log back in for group changes to take effect"
+                        log_warning "Or run: newgrp docker"
+                        log_warning ""
+                        log_warning "Then verify with: docker ps"
+                    fi
+                else
+                    log_warning "Could not automatically add user to docker group"
+                fi
+            fi
+            
+            # If we get here, Docker access still not working - prompt for fallback
+            handle_sandbox_fallback
+            return $?
+            ;;
+        1)
+            # Other Docker error
+            log_warning "Docker is installed but not accessible"
+            handle_sandbox_fallback
+            return $?
+            ;;
+    esac
+}
+
+# Check Docker availability (legacy function, kept for compatibility)
+check_docker() {
+    # This function is now a wrapper that calls the enhanced version
+    check_docker_with_verification
+}
+
+
                 log_warning "User is in docker group but permissions not active in this session"
                 log_info "Testing Docker access with newgrp docker..."
                 

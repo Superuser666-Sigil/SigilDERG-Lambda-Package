@@ -7,7 +7,7 @@ for both base and fine-tuned models. Runs both no-policy and policy-enforced eva
 modes automatically. Supports batched generation with Flash Attention v2 optimization.
 
 Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
-Version: 1.3.7
+Version: 1.3.8
 """
 import os
 import sys
@@ -231,6 +231,52 @@ def generate_samples_for_model(
                             **load_kwargs_no_safe
                         )
                         print("✓ Successfully loaded model using PyTorch format")
+                    except OSError as e2:
+                        # If PyTorch format also fails and suggests TensorFlow, try TensorFlow
+                        if "tensorflow" in str(e2).lower() or "from_tf" in str(e2).lower():
+                            print(f"Warning: PyTorch format not available, trying TensorFlow weights: {e2}")
+                            print("Attempting to load base model explicitly with TensorFlow weights, then applying PEFT adapter...")
+                            try:
+                                # Try to read adapter config to get base model path
+                                from peft import PeftConfig
+                                if checkpoint_subfolder:
+                                    config = PeftConfig.from_pretrained(actual_model_path, subfolder=checkpoint_subfolder)
+                                else:
+                                    config = PeftConfig.from_pretrained(actual_model_path)
+                                
+                                base_model_path = config.base_model_name_or_path
+                                print(f"Loading base model from TensorFlow weights: {base_model_path}")
+                                
+                                # Load base model with TensorFlow weights
+                                base_model = AutoModelForCausalLM.from_pretrained(
+                                    base_model_path,
+                                    dtype=torch.bfloat16,
+                                    device_map="auto",
+                                    trust_remote_code=True,
+                                    attn_implementation=attn_implementation,
+                                    from_tf=True,  # Load from TensorFlow weights
+                                    use_safetensors=False,
+                                )
+                                
+                                # Then load PEFT adapter
+                                if checkpoint_subfolder:
+                                    model = PeftModel.from_pretrained(
+                                        base_model,
+                                        actual_model_path,
+                                        subfolder=checkpoint_subfolder,
+                                    )
+                                else:
+                                    model = PeftModel.from_pretrained(
+                                        base_model,
+                                        actual_model_path,
+                                    )
+                                print("✓ Successfully loaded model using TensorFlow weights + PEFT adapter")
+                            except Exception as e3:
+                                print(f"ERROR: Failed to load model with TensorFlow weights: {e3}")
+                                raise e  # Re-raise original error
+                        else:
+                            print(f"ERROR: Failed to load model even without safetensors: {e2}")
+                            raise e  # Re-raise original error
                     except Exception as e2:
                         print(f"ERROR: Failed to load model even without safetensors: {e2}")
                         raise e  # Re-raise original error
@@ -263,16 +309,32 @@ def generate_samples_for_model(
                             )
                         except OSError as safetensors_error:
                             if "safetensors" in str(safetensors_error).lower():
-                                print(f"Warning: Base model doesn't have safetensors, using PyTorch format")
-                                base_model = AutoModelForCausalLM.from_pretrained(
-                                    base_model_path,
-                                    dtype=torch.bfloat16,
-                                    device_map="auto",
-                                    trust_remote_code=True,
-                                    attn_implementation=attn_implementation,
-                                    from_tf=False,
-                                    use_safetensors=False,
-                                )
+                                print(f"Warning: Base model doesn't have safetensors, trying PyTorch format")
+                                try:
+                                    base_model = AutoModelForCausalLM.from_pretrained(
+                                        base_model_path,
+                                        dtype=torch.bfloat16,
+                                        device_map="auto",
+                                        trust_remote_code=True,
+                                        attn_implementation=attn_implementation,
+                                        from_tf=False,
+                                        use_safetensors=False,
+                                    )
+                                except OSError as pytorch_error:
+                                    # If PyTorch format also fails and suggests TensorFlow, try TensorFlow
+                                    if "tensorflow" in str(pytorch_error).lower() or "from_tf" in str(pytorch_error).lower():
+                                        print(f"Warning: PyTorch format not available, using TensorFlow weights")
+                                        base_model = AutoModelForCausalLM.from_pretrained(
+                                            base_model_path,
+                                            dtype=torch.bfloat16,
+                                            device_map="auto",
+                                            trust_remote_code=True,
+                                            attn_implementation=attn_implementation,
+                                            from_tf=True,  # Load from TensorFlow weights
+                                            use_safetensors=False,
+                                        )
+                                    else:
+                                        raise
                             else:
                                 raise
                         
@@ -922,6 +984,126 @@ def main():
     run_policy = not args.no_policy_only
     
     if not run_no_policy and not run_policy:
+        print("Nothing to do: both modes disabled.")
+        sys.exit(0)
+    
+    all_results: dict[str, dict | None] = {"no-policy": None, "policy": None}
+
+    # Run no-policy evaluation first (if requested)
+    if run_no_policy:
+        print("\n" + "=" * 80)
+        print("PHASE 1: Running evaluation WITHOUT policy enforcement")
+        print("=" * 80)
+        no_policy_results = run_evaluation_mode(
+            args.base_model,
+            args.checkpoint_path,
+            output_dir,
+            args.num_samples,
+            k_values,
+            sandbox_mode,
+            enforce_policy=False,
+            skip_base=args.skip_base,
+            skip_finetuned=args.skip_finetuned,
+            n_workers=args.n_workers,
+            timeout=args.timeout,
+            batch_size=args.batch_size,
+            max_new_tokens=args.max_new_tokens,
+            device=device,
+            seed=args.seed,
+        )
+        all_results["no-policy"] = no_policy_results
+        print(
+            f"\n✓ Non-policy evaluation complete! Results in: {output_dir / 'no-policy'}"
+        )
+    
+    # Run policy evaluation second (if requested)
+    if run_policy:
+        print("\n" + "=" * 80)
+        print("PHASE 2: Running evaluation WITH policy enforcement")
+        print("=" * 80)
+        policy_results = run_evaluation_mode(
+            args.base_model,
+            args.checkpoint_path,
+            output_dir,
+            args.num_samples,
+            k_values,
+            sandbox_mode,
+            enforce_policy=True,
+            skip_base=args.skip_base,
+            skip_finetuned=args.skip_finetuned,
+            n_workers=args.n_workers,
+            timeout=args.timeout,
+            batch_size=args.batch_size,
+            max_new_tokens=args.max_new_tokens,
+            device=device,
+            seed=args.seed,
+        )
+        all_results["policy"] = policy_results
+        print(
+            f"\n✓ Policy evaluation complete! Results in: {output_dir / 'policy'}"
+        )
+    
+    # Combined summary markdown (unchanged from your existing logic)
+    if all_results["no-policy"] or all_results["policy"]:
+        summary_file = output_dir / "combined_summary.md"
+        with summary_file.open("w", encoding="utf-8") as f:
+            f.write("# HumanEval Rust Evaluation Summary\n\n")
+            f.write(f"- Base model: `{args.base_model}`\n")
+            f.write(f"- Fine-tuned checkpoint: `{args.checkpoint_path}`\n")
+            f.write(f"- Num samples per task: {args.num_samples}\n")
+            f.write(f"- k-values: {k_values}\n")
+            f.write(f"- Device: {device}\n")
+            f.write(f"- Seed: {args.seed}\n\n")
+
+            if all_results["no-policy"]:
+                f.write("## No-Policy Mode\n\n")
+            if all_results["no-policy"]["base"]:
+                f.write("### Base Model\n")
+                for metric, value in sorted(
+                    all_results["no-policy"]["base"].items()
+                ):
+                    f.write(f"- **{metric}**: {value:.4f} ({value*100:.2f}%)\n")
+            if all_results["no-policy"]["finetuned"]:
+                f.write("\n### Fine-tuned Model\n")
+                for metric, value in sorted(
+                    all_results["no-policy"]["finetuned"].items()
+                ):
+                    f.write(f"- **{metric}**: {value:.4f} ({value*100:.2f}%)\n")
+            
+            if all_results["policy"]:
+                f.write("\n## Policy Enforcement Mode\n\n")
+            if all_results["policy"]["base"]:
+                f.write("### Base Model\n")
+                for metric, value in sorted(
+                    all_results["policy"]["base"].items()
+                ):
+                    f.write(f"- **{metric}**: {value:.4f} ({value*100:.2f}%)\n")
+            if all_results["policy"]["finetuned"]:
+                f.write("\n### Fine-tuned Model\n")
+                for metric, value in sorted(
+                    all_results["policy"]["finetuned"].items()
+                ):
+                    f.write(f"- **{metric}**: {value:.4f} ({value*100:.2f}%)\n")
+        
+        print(f"\n✓ Combined summary saved to: {summary_file}")
+    
+    # Top-level metadata for Lambda
+    write_eval_metadata(output_dir, all_results, args, device)
+
+    print("\n" + "=" * 80)
+    print("All Evaluations Complete!")
+    print("=" * 80)
+    print(f"\nResults organized in sub-folders:")
+    if run_no_policy:
+        print(f"  - {output_dir / 'no-policy'}/ (no policy enforcement)")
+    if run_policy:
+        print(f"  - {output_dir / 'policy'}/ (policy enforcement enabled)")
+    if run_no_policy and run_policy:
+        print(f"  - {output_dir / 'combined_summary.md'} (combined summary)")
+
+if __name__ == "__main__":
+    main()
+
         print("Nothing to do: both modes disabled.")
         sys.exit(0)
     

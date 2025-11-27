@@ -8,7 +8,7 @@
 # 2.7.1 for CUDA 12.8+). Attempts to install Flash Attention v2 with graceful fallback.
 #
 # Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
-# Version: 1.3.7
+# Version: 1.3.8
 
 # Source dependencies
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

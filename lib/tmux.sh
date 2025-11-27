@@ -9,7 +9,7 @@
 # execution if tmux is not available.
 #
 # Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
-# Version: 1.3.7
+# Version: 1.3.8
 
 # Source dependencies
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -236,6 +236,52 @@ if [ \$EXIT_CODE -eq 0 ]; then
     echo ""
     echo "Duration: \$EVAL_DURATION seconds (\${EVAL_HOURS_INT}h \${EVAL_MINUTES}m \${EVAL_SECONDS}s)"
     echo "Estimated cost (H100 SXM5 @ \$3.29/hr): \$\${ESTIMATED_COST_DOLLARS}.\$(printf "%02d" \$ESTIMATED_COST_CENTS)"
+else
+    echo "Evaluation failed with exit code: \$EXIT_CODE"
+    echo ""
+    echo "Duration: \$EVAL_DURATION seconds (\${EVAL_HOURS_INT}h \${EVAL_MINUTES}m \${EVAL_SECONDS}s)"
+    echo "Check logs for details: setup.log, $OUTPUT_DIR/**"
+fi
+echo "=========================================="
+echo ""
+if [ "${NONINTERACTIVE:-0}" != "1" ]; then
+echo "Press Enter to close this window (or detach with Ctrl+B, then D)"
+read
+fi
+EOF
+    
+    chmod +x "$EVAL_SCRIPT"
+    
+    # Start tmux session with the evaluation script
+    tmux new-session -d -s "$TMUX_SESSION" -x 120 -y 40 "$EVAL_SCRIPT; bash"
+    
+    log_success "Evaluation started in tmux session '$TMUX_SESSION'"
+    echo ""
+    log_info "To attach to the session:"
+    log_info "  tmux attach -t $TMUX_SESSION"
+    echo ""
+    log_info "To detach from tmux (keep it running):"
+    log_info "  Press Ctrl+B, then press D"
+    echo ""
+    log_info "To kill the session when done:"
+    log_info "  tmux kill-session -t $TMUX_SESSION"
+    
+    if [ "${NONINTERACTIVE:-0}" != "1" ]; then
+    # Ask if user wants to attach now
+    read -p "Attach to tmux session now? (Y/n): " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+        tmux attach -t "$TMUX_SESSION"
+    else
+        log_info "Session is running in background. Attach later with: tmux attach -t $TMUX_SESSION"
+        fi
+    else
+        log_info "NONINTERACTIVE=1 set; leaving tmux session running in background."
+        log_info "Attach later with: tmux attach -t $TMUX_SESSION"
+    fi
+}
+
+
 else
     echo "Evaluation failed with exit code: \$EXIT_CODE"
     echo ""

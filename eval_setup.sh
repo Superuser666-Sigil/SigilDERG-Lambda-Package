@@ -14,7 +14,7 @@
 # Defaults optimized for 1×H100 with 26 vCPUs (overridable via CLI flags)
 #
 # Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
-# Version: 1.3.7
+# Version: 1.3.8
 
 set -euo pipefail  # Exit on error, undefined vars, pipe failures
 
@@ -184,6 +184,17 @@ main() {
         log_info "    Script runs BOTH policy and non-policy modes automatically"
         log_info "    Results organized in: no-policy/ and policy/ sub-folders"
         log_info "  Optional flags:"
+        log_info "    --policy-only        : Run only policy enforcement mode"
+        log_info "    --no-policy-only     : Run only no-policy mode"
+        log_info "    --sandbox-mode=docker: Force Docker sandboxing"
+        log_info "    --sandbox-mode=none  : No sandboxing (UNSAFE, dev only)"
+        fi
+    fi
+}
+
+# Run main
+main "$@"
+
         log_info "    --policy-only        : Run only policy enforcement mode"
         log_info "    --no-policy-only     : Run only no-policy mode"
         log_info "    --sandbox-mode=docker: Force Docker sandboxing"

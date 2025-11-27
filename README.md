@@ -44,7 +44,7 @@ The `eval_setup.sh` script is **idempotent, self-checking, and hard-fails on mis
 ### Installs SigilDERG Ecosystem
 - **sigil-pipeline** >= 1.2.1 (from PyPI, GitHub fallback)
 - **sigilderg-finetuner** (from PyPI, GitHub fallback)
-- **human-eval-rust** >= 1.3.7 (from PyPI, GitHub fallback)
+- **human-eval-rust** >= 1.3.8 (from PyPI, GitHub fallback)
 - Core ML dependencies (transformers, accelerate, peft, bitsandbytes, etc.)
 
 ### Runs Evaluation
@@ -74,7 +74,61 @@ This package guarantees a consistent, tested combination of ecosystem components
 |-----------|----------------|---------|
 | **sigil-pipeline** | >= 1.2.1 | Rust code dataset generation |
 | **sigilderg-finetuner** | latest | QLoRA fine-tuning on Rust code |
-| **human-eval-rust** | >= 1.3.7 | HumanEval-Rust evaluation harness |
+| **human-eval-rust** | >= 1.3.8 | HumanEval-Rust evaluation harness |
+
+**Architecture:** See [SigilDERG Ecosystem Architecture](https://github.com/Superuser666-Sigil/SigilDERG-Data_Production/blob/main/ARCHITECTURE.md) for complete overview of how these components integrate.
+
+**Note:** Even though the underlying projects are modular and can be used independently, this package pins specific version combinations that have been validated together for reproducible evaluation results.
+
+## Script Behavior
+
+- **Idempotent:** Safe to run multiple times; skips already-installed components
+- **Self-checking:** Validates environment (OS, GPU), package versions, and imports
+- **Hard-fail:** Exits immediately on critical errors (missing Rust, failed package installs)
+- **Sandbox-aware:** Automatically detects and uses Docker or Firejail for code execution isolation
+- **Persistent:** Runs evaluation in tmux session (survives disconnections)
+
+## Output Summary
+
+At completion, the script prints:
+- Location of logs: `setup.log`, `humaneval_results/**`
+- Evaluation duration (wall-clock time)
+- Estimated cost (approximate: wall-time × $3.29/hr for H100 SXM5)
+
+## Configuration
+
+Customize via environment variables (set before running):
+
+```bash
+BASE_MODEL="meta-llama/Meta-Llama-3.1-8B-Instruct"  # Base model path
+CHECKPOINT_PATH="Superuser666-Sigil/..."             # Fine-tuned checkpoint
+NUM_SAMPLES=100                                       # Samples per task
+K_VALUES="1,10,100"                                   # Pass@k metrics
+OUTPUT_DIR="./humaneval_results"                     # Output directory
+SANDBOX_MODE="docker"                                # docker, firejail, none, or auto
+SKIP_ENV_CHECK=1                                      # Bypass OS/GPU validation
+NONINTERACTIVE=1                                      # No prompts, auto-start evaluation
+```
+
+## Repository Structure
+
+- **`eval_setup.sh`** - Main entry point and orchestration script
+- **`eval_setup_config.sh`** - Centralized configuration and constants
+- **`lib/`** - Modular function libraries (11 focused modules)
+- **`scripts/evaluate_humaneval.py`** - Standalone Python evaluation script
+- **`eval_setup_readme.md`** - Detailed technical documentation
+
+## Related Documentation
+
+- **[Ecosystem Architecture](https://github.com/Superuser666-Sigil/SigilDERG-Data_Production/blob/main/ARCHITECTURE.md)** - Complete overview of the SigilDERG ecosystem
+- **[Evaluation Setup Guide](eval_setup_readme.md)** - Detailed technical documentation
+
+## License
+
+Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
+
+| **sigilderg-finetuner** | latest | QLoRA fine-tuning on Rust code |
+| **human-eval-rust** | >= 1.3.8 | HumanEval-Rust evaluation harness |
 
 **Architecture:** See [SigilDERG Ecosystem Architecture](https://github.com/Superuser666-Sigil/SigilDERG-Data_Production/blob/main/ARCHITECTURE.md) for complete overview of how these components integrate.
 
