@@ -8,7 +8,7 @@
 # Sources ~/.cargo/env to make rustc available in PATH.
 #
 # Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
-# Version: 1.3.5
+# Version: 1.3.6
 
 # Source dependencies
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

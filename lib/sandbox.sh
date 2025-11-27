@@ -9,7 +9,7 @@
 # Includes retry logic and detailed diagnostics for Docker startup issues.
 #
 # Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
-# Version: 1.3.5
+# Version: 1.3.6
 
 # Source dependencies
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
