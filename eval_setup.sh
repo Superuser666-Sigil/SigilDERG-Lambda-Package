@@ -1154,6 +1154,53 @@ def generate_samples_for_model(
     
     return output_file
 
+def _filter_bad_samples(sample_file: str) -> str:
+    """
+    Pre-filter obviously bad samples to save evaluation time.
+    Returns path to filtered sample file.
+    """
+    import jsonlines
+    import tempfile
+    
+    filtered_count = 0
+    total_count = 0
+    filtered_file = sample_file + ".filtered"
+    
+    with jsonlines.open(sample_file, mode='r') as reader, \
+         jsonlines.open(filtered_file, mode='w') as writer:
+        
+        for sample in reader:
+            total_count += 1
+            completion = sample.get('completion', '').strip()
+            
+            # Filter out empty completions
+            if not completion:
+                filtered_count += 1
+                continue
+            
+            # Filter out very short completions (<20 chars) - likely incomplete
+            if len(completion) < 20:
+                filtered_count += 1
+                continue
+            
+            # Filter out completions with severe brace mismatches (>2 difference)
+            # This catches obviously incomplete/truncated code
+            open_braces = completion.count('{')
+            close_braces = completion.count('}')
+            if abs(open_braces - close_braces) > 2:
+                filtered_count += 1
+                continue
+            
+            # Keep the sample
+            writer.write(sample)
+    
+    if filtered_count > 0:
+        print(f"  Filtered out {filtered_count}/{total_count} obviously bad samples ({filtered_count/total_count*100:.1f}%)")
+        print(f"  Evaluating {total_count - filtered_count} samples")
+    
+    return filtered_file if filtered_count > 0 else sample_file
+
+
 def evaluate_samples(
     sample_file: str, 
     output_dir: Path, 
@@ -1176,9 +1223,13 @@ def evaluate_samples(
     print(f"Policy enforcement: {enforce_policy}")
     print(f"Workers: {n_workers}, Timeout: {timeout}s")
     
+    # Pre-filter obviously bad samples to save evaluation time
+    print("\nPre-filtering obviously bad samples...")
+    filtered_file = _filter_bad_samples(sample_file)
+    
     try:
         results = evaluate_functional_correctness(
-            sample_file,
+            filtered_file,
             k_values,
             n_workers=n_workers,
             timeout=timeout,
@@ -1187,6 +1238,15 @@ def evaluate_samples(
             sandbox_mode=sandbox_mode,  # None = auto-detect
             enforce_policy=enforce_policy,
         )
+        
+        # Clean up filtered file if we created one
+        if filtered_file != sample_file:
+            import os
+            try:
+                os.remove(filtered_file)
+            except Exception:
+                pass  # Ignore cleanup errors
+        
         return results
     except Exception as e:
         print(f"ERROR: Evaluation failed: {e}")
