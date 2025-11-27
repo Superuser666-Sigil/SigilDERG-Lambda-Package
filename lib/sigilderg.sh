@@ -5,10 +5,10 @@
 #
 # Installs core dependencies, human-eval-rust, sigil-pipeline, and sigilderg-finetuner
 # with PyPI fallback to GitHub for reliability. Validates package versions and import
-# functionality to ensure correct installation. Requires human-eval-rust>=1.3.6.
+# functionality to ensure correct installation. Requires human-eval-rust>=1.3.7.
 #
 # Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
-# Version: 1.3.6
+# Version: 1.3.7
 
 # Source dependencies
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -47,12 +47,12 @@ install_sigilderg_components() {
     log_success "jsonlines installed"
     
     # Install human-eval-rust (with fallback to GitHub if PyPI not available or has syntax errors)
-    log_info "Installing human-eval-rust (requires >=1.3.6 for H100 optimizations, sandbox detection fix, main() function removal fix, Docker image pre-build, and sample coverage fixes: 4GB memory, 24 workers, 10s timeout, circular import fix, f-string syntax fix, sandbox auto-detect, main() regex fix)..."
+    log_info "Installing human-eval-rust (requires >=1.3.7 for H100 optimizations, sandbox detection fix, main() function removal fix, Docker image pre-build, sample coverage fixes, safetensors fallback, and relaxed filtering: 4GB memory, 24 workers, 10s timeout, circular import fix, f-string syntax fix, sandbox auto-detect, main() regex fix)..."
     # Uninstall old version first to ensure clean install
     "$PIP_CMD" uninstall -y human-eval-rust 2>/dev/null || true
-    # Force reinstall with version constraint to get H100 optimizations and fixes (1.3.6+)
+    # Force reinstall with version constraint to get H100 optimizations and fixes (1.3.7+)
     PYPI_INSTALL_SUCCESS=false
-    if "$PIP_CMD" install --force-reinstall --no-cache-dir "human-eval-rust>=1.3.6" 2>&1 | tee -a setup.log; then
+    if "$PIP_CMD" install --force-reinstall --no-cache-dir "human-eval-rust>=1.3.7" 2>&1 | tee -a setup.log; then
         PYPI_INSTALL_SUCCESS=true
         # Small delay to ensure package metadata is fully written
         sleep 2
@@ -85,21 +85,21 @@ install_sigilderg_components() {
             if [[ "$INSTALLED_VERSION" == "unknown" ]] || [[ -z "$INSTALLED_VERSION" ]]; then
                 if "$VENV_DIR/bin/python" -c "import human_eval" 2>/dev/null; then
                     # Import works, version might just not be accessible, assume it's the installed version
-                    INSTALLED_VERSION="1.3.6+"
-                    log_info "Package imports successfully, assuming version >=1.3.6 from PyPI"
+                    INSTALLED_VERSION="1.3.7+"
+                    log_info "Package imports successfully, assuming version >=1.3.7 from PyPI"
                 fi
             fi
             
             if [[ "$INSTALLED_VERSION" != "unknown" ]] && [[ -n "$INSTALLED_VERSION" ]]; then
                 log_success "human-eval-rust installed from PyPI (version: $INSTALLED_VERSION)"
-                # Verify it's the correct version (allow 1.3.6+ format)
-                if [[ "$INSTALLED_VERSION" != "1.3.6" ]] && [[ "$INSTALLED_VERSION" != "1.3.6+" ]] && [[ ! "$INSTALLED_VERSION" =~ ^1\.3\.[6-9] ]]; then
-                    log_warning "Installed version $INSTALLED_VERSION may not have the latest fixes (expected >=1.3.6)"
+                # Verify it's the correct version (allow 1.3.7+ format)
+                if [[ "$INSTALLED_VERSION" != "1.3.7" ]] && [[ "$INSTALLED_VERSION" != "1.3.7+" ]] && [[ ! "$INSTALLED_VERSION" =~ ^1\.3\.[7-9] ]]; then
+                    log_warning "Installed version $INSTALLED_VERSION may not have the latest fixes (expected >=1.3.7)"
                 fi
             else
                 # Version check failed, but PyPI install succeeded - likely just a version detection issue
                 log_warning "PyPI package installed successfully but version check inconclusive"
-                    log_info "Assuming version >=1.3.6 from PyPI installation (package installed successfully)"
+                    log_info "Assuming version >=1.3.7 from PyPI installation (package installed successfully)"
                     log_success "human-eval-rust installed from PyPI (version check inconclusive, but installation succeeded)"
             fi
         fi
@@ -132,9 +132,9 @@ install_sigilderg_components() {
                 GITHUB_VERSION="$PIP_VERSION"
             fi
         fi
-        if [[ "$GITHUB_VERSION" != "1.3.6" ]] && [[ "$GITHUB_VERSION" != "unknown" ]] && [[ -n "$GITHUB_VERSION" ]]; then
-            log_warning "GitHub installation version $GITHUB_VERSION does not match expected 1.3.6"
-            log_warning "This may indicate the GitHub main branch is not up to date. Consider using PyPI version 1.3.6+"
+        if [[ "$GITHUB_VERSION" != "1.3.7" ]] && [[ "$GITHUB_VERSION" != "unknown" ]] && [[ -n "$GITHUB_VERSION" ]]; then
+            log_warning "GitHub installation version $GITHUB_VERSION does not match expected 1.3.7"
+            log_warning "This may indicate the GitHub main branch is not up to date. Consider using PyPI version 1.3.7+"
         fi
         log_success "human-eval-rust installed from GitHub (version: ${GITHUB_VERSION:-unknown})"
         # Note: termcolor>=3.2.0 is already installed in core dependencies and is compatible across all ecosystem components

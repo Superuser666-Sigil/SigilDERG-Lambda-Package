@@ -8,7 +8,7 @@
 # the dedicated virtual environment at ~/.venvs/sigilderg-humaneval.
 #
 # Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
-# Version: 1.3.6
+# Version: 1.3.7
 
 # Source dependencies
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

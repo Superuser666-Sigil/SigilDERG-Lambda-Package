@@ -44,7 +44,7 @@ The `eval_setup.sh` script is **idempotent, self-checking, and hard-fails on mis
 ### Installs SigilDERG Ecosystem
 - **sigil-pipeline** >= 1.2.1 (from PyPI, GitHub fallback)
 - **sigilderg-finetuner** (from PyPI, GitHub fallback)
-- **human-eval-rust** >= 1.3.6 (from PyPI, GitHub fallback)
+- **human-eval-rust** >= 1.3.7 (from PyPI, GitHub fallback)
 - Core ML dependencies (transformers, accelerate, peft, bitsandbytes, etc.)
 
 ### Runs Evaluation
@@ -74,7 +74,7 @@ This package guarantees a consistent, tested combination of ecosystem components
 |-----------|----------------|---------|
 | **sigil-pipeline** | >= 1.2.1 | Rust code dataset generation |
 | **sigilderg-finetuner** | latest | QLoRA fine-tuning on Rust code |
-| **human-eval-rust** | >= 1.3.6 | HumanEval-Rust evaluation harness |
+| **human-eval-rust** | >= 1.3.7 | HumanEval-Rust evaluation harness |
 
 **Architecture:** See [SigilDERG Ecosystem Architecture](https://github.com/Superuser666-Sigil/SigilDERG-Data_Production/blob/main/ARCHITECTURE.md) for complete overview of how these components integrate.
 
