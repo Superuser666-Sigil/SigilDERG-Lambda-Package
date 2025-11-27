@@ -742,7 +742,7 @@ import numpy as np
 import torch
 import jsonlines
 from transformers import AutoTokenizer, AutoModelForCausalLM
-from peft import AutoPeftModelForCausalLM
+from peft import AutoPeftModelForCausalLM, PeftConfig, PeftModel
 from human_eval.data import read_problems, get_human_eval_dataset, write_jsonl
 from human_eval.evaluation import evaluate_functional_correctness
 
@@ -922,6 +922,8 @@ def generate_samples_for_model(
                 "device_map": "auto",
                 "trust_remote_code": True,
                 "attn_implementation": attn_implementation,
+                "from_tf": False,  # Explicitly prevent TensorFlow loading
+                "use_safetensors": True,  # Prefer SafeTensors format
             }
             
             # If we have a checkpoint subfolder, use it
@@ -929,10 +931,56 @@ def generate_samples_for_model(
                 load_kwargs["subfolder"] = checkpoint_subfolder
                 print(f"Loading PEFT adapter from subfolder: {checkpoint_subfolder}")
             
-            model = AutoPeftModelForCausalLM.from_pretrained(
-                actual_model_path,
-                **load_kwargs
-            )
+            try:
+                model = AutoPeftModelForCausalLM.from_pretrained(
+                    actual_model_path,
+                    **load_kwargs
+                )
+            except OSError as e:
+                # If loading fails with TensorFlow error, try loading base model explicitly
+                if "TensorFlow" in str(e) or "from_tf" in str(e):
+                    print(f"Warning: Encountered TensorFlow weights issue: {e}")
+                    print("Attempting to load base model explicitly, then applying PEFT adapter...")
+                    try:
+                        # Try to read adapter config to get base model path
+                        from peft import PeftConfig
+                        if checkpoint_subfolder:
+                            config = PeftConfig.from_pretrained(actual_model_path, subfolder=checkpoint_subfolder)
+                        else:
+                            config = PeftConfig.from_pretrained(actual_model_path)
+                        
+                        base_model_path = config.base_model_name_or_path
+                        print(f"Loading base model from: {base_model_path}")
+                        
+                        # Load base model explicitly with PyTorch weights only
+                        base_model = AutoModelForCausalLM.from_pretrained(
+                            base_model_path,
+                            dtype=torch.bfloat16,
+                            device_map="auto",
+                            trust_remote_code=True,
+                            attn_implementation=attn_implementation,
+                            from_tf=False,
+                            use_safetensors=True,
+                        )
+                        
+                        # Then load PEFT adapter
+                        if checkpoint_subfolder:
+                            model = PeftModel.from_pretrained(
+                                base_model,
+                                actual_model_path,
+                                subfolder=checkpoint_subfolder,
+                            )
+                        else:
+                            model = PeftModel.from_pretrained(
+                                base_model,
+                                actual_model_path,
+                            )
+                        print("✓ Successfully loaded model using explicit base model + PEFT adapter approach")
+                    except Exception as e2:
+                        print(f"ERROR: Failed to load model with explicit base model approach: {e2}")
+                        raise e  # Re-raise original error
+                else:
+                    raise
         else:
             model = AutoModelForCausalLM.from_pretrained(
                 model_path,
@@ -940,9 +988,16 @@ def generate_samples_for_model(
                 device_map="auto",
                 trust_remote_code=True,
                 attn_implementation=attn_implementation,
+                from_tf=False,  # Explicitly prevent TensorFlow loading
+                use_safetensors=True,  # Prefer SafeTensors format
             )
     except Exception as e:
         print(f"ERROR: Failed to load model: {e}")
+        print(f"Model path: {model_path}")
+        print(f"Is PEFT: {is_peft}")
+        if is_peft:
+            print(f"Actual model path: {actual_model_path}")
+            print(f"Checkpoint subfolder: {checkpoint_subfolder}")
         raise
     
     model.eval()
