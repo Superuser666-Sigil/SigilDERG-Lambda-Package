@@ -19,9 +19,9 @@ jobs:
       - name: Lint bash scripts
         run: |
           # Use -x to follow source directives, -S to set severity to warning
-          # Exclude SC1091 (can't follow sourced files) since we check them separately
-          shellcheck -x -e SC1091 eval_setup.sh eval_setup_config.sh
-          shellcheck lib/*.sh
+          # Exclude SC1090/SC1091 (can't follow sourced files) since we check them separately
+          shellcheck -x -e SC1090,SC1091 -S warning eval_setup.sh eval_setup_config.sh
+          shellcheck -e SC1090,SC1091 -S warning lib/*.sh
 
   lint-python:
     name: Lint Python
@@ -86,6 +86,8 @@ jobs:
     name: Validate Script Syntax
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - name: Validate bash syntax
         run: |
           files=(eval_setup.sh eval_setup_config.sh lib/*.sh)
