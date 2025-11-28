@@ -90,23 +90,18 @@ main() {
     
     # Remove the curly braces {} and use PIPESTATUS to catch the error code
     # through the pipe to 'tee'. This prevents 'set -e' from killing the script.
-    check_docker_with_verification 2>&1 | tee -a setup.log
-    DOCKER_CHECK_EXIT=${PIPESTATUS[0]}
-    
+    ensure_sandbox 2>&1 | tee -a setup.log
+    SANDBOX_CHECK_EXIT=${PIPESTATUS[0]}
+
     # Check exit code
-    if [ $DOCKER_CHECK_EXIT -eq 2 ]; then
-        # Exit code 2 means user chose to stop (option 3) or permission denied fatal
+    if [ $SANDBOX_CHECK_EXIT -eq 2 ]; then
         log_info ""
-        log_info "Setup stopped by user request or critical permission error."
-        log_info "Fix Docker permissions and re-run the script when ready."
+        log_info "Setup stopped by user request."
         exit 1
-    elif [ $DOCKER_CHECK_EXIT -ne 0 ]; then
-        if [ -z "${SANDBOX_MODE:-}" ]; then
-            # If user didn't choose a fallback, this is an error
-            ERRORS+=("Docker verification failed and no sandbox fallback selected")
-        else
-            WARNINGS+=("Docker check - using ${SANDBOX_MODE} as fallback")
-        fi
+    elif [ $SANDBOX_CHECK_EXIT -ne 0 ]; then
+        ERRORS+=("Sandbox verification failed")
+    elif [ "${SANDBOX_MODE:-firejail}" = "none" ]; then
+        WARNINGS+=("Running without sandbox protection")
     fi
     
     {
