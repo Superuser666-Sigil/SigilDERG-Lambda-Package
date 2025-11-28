@@ -5,7 +5,7 @@
 #
 # Installs core dependencies, human-eval-rust, sigil-pipeline, and sigilderg-finetuner
 # with PyPI fallback to GitHub for reliability. Validates package versions and import
-# functionality to ensure correct installation. Requires human-eval-rust>=1.4.4.
+# functionality to ensure correct installation. Requires human-eval-rust>=2.0.0.
 #
 # Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
 # Version: 1.3.8
@@ -47,12 +47,12 @@ install_sigilderg_components() {
     log_success "jsonlines installed"
     
     # Install human-eval-rust (with fallback to GitHub if PyPI not available or has syntax errors)
-    log_info "Installing human-eval-rust (requires >=1.4.4 for enhanced prompt format, result schema, compile rate tracking, main-free rate tracking, rustc preflight checks, never-dropping completions, Docker/Finetuner parity, Rust 1.91.1 Docker image, and bug fixes)..."
+    log_info "Installing human-eval-rust (requires >=2.0.0 for Firejail-first sandboxing, enhanced prompt format, result schema, compile rate tracking, main-free rate tracking, rustc preflight checks, never-dropping completions, and bug fixes)..."
     # Uninstall old version first to ensure clean install
     "$PIP_CMD" uninstall -y human-eval-rust 2>/dev/null || true
     # Force reinstall with version constraint to get H100 optimizations and fixes (1.3.8+)
     PYPI_INSTALL_SUCCESS=false
-    if "$PIP_CMD" install --force-reinstall --no-cache-dir "human-eval-rust>=1.4.4" 2>&1 | tee -a setup.log; then
+    if "$PIP_CMD" install --force-reinstall --no-cache-dir "human-eval-rust>=2.0.0" 2>&1 | tee -a setup.log; then
         PYPI_INSTALL_SUCCESS=true
         # Small delay to ensure package metadata is fully written
         sleep 2
