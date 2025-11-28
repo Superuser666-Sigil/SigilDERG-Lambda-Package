@@ -107,7 +107,7 @@ At a high level, the script:
      - The **Rust QLoRA fine-tuned checkpoint** (default: `Superuser666-Sigil/Llama-3.1-8B-Instruct-Rust-QLora/checkpoint-9000`)
    - Supports skipping base or finetuned model evaluation via `--skip-base` or `--skip-finetuned` flags.
    - Auto-selects device (`cuda` if available, otherwise `cpu`) unless overridden with `--device`.
-   - Seeds all relevant RNGs (`python`, `numpy`, `torch`) for reproducibility (default seed: 1234).
+   - Seeds all relevant RNGs (`python`, `numpy`, `torch`) for reproducibility (default seed: 1234, configurable via `SEED` environment variable or `--seed` CLI argument).
    - Uses `human-eval-rust` to:
      - Generate completions for each HumanEval-Rust problem.
      - Execute them in a Firejail sandbox when available; requires explicit opt-in to run unsandboxed.
@@ -217,6 +217,7 @@ You can customize the evaluation via environment variables before running the sc
 - `K_VALUES`: Comma-separated k-values for pass@k metrics (default: `1,10,100`)
 - `OUTPUT_DIR`: Output directory (default: `./humaneval_results`)
 - `SANDBOX_MODE`: Sandbox mode - `firejail` (default) or `none` (explicit unsandboxed opt-in)
+- `SEED`: Random seed for reproducibility (default: `1234`)
 - `SKIP_ENV_CHECK`: Set to `1` to bypass Ubuntu 22.04 + H100 environment check
 - `NONINTERACTIVE`: Set to `1` for non-interactive mode (no prompts, auto-start evaluation)
 

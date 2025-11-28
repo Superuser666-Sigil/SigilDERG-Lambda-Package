@@ -133,6 +133,7 @@ NUM_SAMPLES=100                                       # Samples per task
 K_VALUES="1,10,100"                                   # Pass@k metrics
 OUTPUT_DIR="./humaneval_results"                     # Output directory
 SANDBOX_MODE="firejail"                              # Firejail by default; set to none to disable sandboxing
+SEED=1234                                            # Random seed for reproducibility (default: 1234)
 SKIP_ENV_CHECK=1                                      # Bypass OS/GPU checks
 NONINTERACTIVE=1                                      # Auto-start evaluation
 ```

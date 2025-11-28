@@ -50,6 +50,7 @@ run_evaluation() {
             --output-dir "$OUTPUT_DIR"
             --num-samples "$NUM_SAMPLES"
             --k-values "$K_VALUES"
+            --seed "${SEED:-1234}"
         )
         if [ -n "${SANDBOX_MODE:-}" ]; then
             PY_ARGS+=( --sandbox-mode "$SANDBOX_MODE" )
@@ -104,6 +105,7 @@ run_evaluation() {
     EVAL_CMD="$EVAL_CMD --output-dir $OUTPUT_DIR"
     EVAL_CMD="$EVAL_CMD --num-samples $NUM_SAMPLES"
     EVAL_CMD="$EVAL_CMD --k-values $K_VALUES"
+    EVAL_CMD="$EVAL_CMD --seed ${SEED:-1234}"
     
     # Add sandbox mode if specified (from environment or fallback selection)
     if [ -n "${SANDBOX_MODE:-}" ]; then

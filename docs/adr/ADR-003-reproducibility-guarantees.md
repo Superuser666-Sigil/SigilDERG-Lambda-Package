@@ -39,9 +39,10 @@ We implement **multi-layer reproducibility guarantees**:
 
 ### 3. Seed Control
 
-- Random seed set to 1234 by default (configurable via `--seed`)
+- Random seed set to 1234 by default (configurable via `--seed` CLI argument or `SEED` environment variable)
 - Seeds set for: Python random, NumPy, PyTorch (CPU and CUDA)
 - Same seed produces same outputs given same model weights
+- Environment variable allows seed configuration without modifying command-line arguments, useful for smoke tests and automated runs
 
 ### 4. Metadata Capture
 

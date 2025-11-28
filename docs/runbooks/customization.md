@@ -12,6 +12,7 @@ export CHECKPOINT_PATH="Superuser666-Sigil/Llama-3.1-8B-Instruct-Rust-QLora/chec
 # Evaluation parameters
 export NUM_SAMPLES=100        # Samples per task (1-200)
 export K_VALUES="1,10,100"    # Pass@k values to compute
+export SEED=1234              # Random seed for reproducibility (default: 1234)
 
 # Output
 export OUTPUT_DIR="./humaneval_results"
@@ -205,6 +206,15 @@ python evaluate_humaneval.py \
 
 ### Exact Reproduction
 
+Using environment variable (recommended for smoke tests):
+
+```bash
+export SEED=1234
+python evaluate_humaneval.py
+```
+
+Or using CLI argument:
+
 ```bash
 python evaluate_humaneval.py --seed 1234
 ```
@@ -214,6 +224,14 @@ python evaluate_humaneval.py --seed 1234
 For statistical significance testing:
 
 ```bash
+# Using environment variable
+for seed in 1234 5678 9012; do
+    export SEED=$seed
+    python evaluate_humaneval.py \
+        --output-dir "./results_seed_${seed}"
+done
+
+# Or using CLI argument
 for seed in 1234 5678 9012; do
     python evaluate_humaneval.py \
         --seed $seed \

@@ -31,6 +31,7 @@ export SANDBOX_MODE="${SANDBOX_MODE:-firejail}"    # Firejail by default; set to
 # Reproducibility toggles
 export SKIP_ENV_CHECK="${SKIP_ENV_CHECK:-0}"  # Set to 1 to bypass strict Ubuntu 22.04 + H100 check
 export NONINTERACTIVE="${NONINTERACTIVE:-0}"  # Set to 1 for CI/non-interactive runs (no prompts)
+export SEED="${SEED:-1234}"  # Random seed for reproducibility (default: 1234)
 
 # Note: Script now runs BOTH policy and non-policy modes automatically
 # Results are organized in sub-folders: no-policy/ and policy/
