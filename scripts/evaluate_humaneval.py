@@ -20,67 +20,29 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-# Lazy imports for heavy dependencies (torch, transformers, etc.)
-# These are only imported when actually needed for model operations
-numpy = None
-torch = None
-jsonlines = None
-transformers = None
-peft = None
-human_eval_data = None
-human_eval_evaluation = None
-
-
-def _ensure_heavy_imports():
-    """Lazily import heavy dependencies when needed."""
-    global numpy, torch, jsonlines, transformers, peft, human_eval_data, human_eval_evaluation
-    if torch is None:
-        import jsonlines as _jsonlines
-        import numpy as np
-        import torch as _torch
-        from human_eval import data as _human_eval_data
-        from human_eval import evaluation as _human_eval_evaluation
-        from peft import AutoPeftModelForCausalLM, PeftConfig, PeftModel
-        from transformers import AutoModelForCausalLM, AutoTokenizer
-
-        numpy = np
-        torch = _torch
-        jsonlines = _jsonlines
-        # Store module references for transformers/peft classes
-        transformers = type(
-            "transformers",
-            (),
-            {
-                "AutoTokenizer": AutoTokenizer,
-                "AutoModelForCausalLM": AutoModelForCausalLM,
-            },
-        )()
-        peft = type(
-            "peft",
-            (),
-            {
-                "AutoPeftModelForCausalLM": AutoPeftModelForCausalLM,
-                "PeftConfig": PeftConfig,
-                "PeftModel": PeftModel,
-            },
-        )()
-        human_eval_data = _human_eval_data
-        human_eval_evaluation = _human_eval_evaluation
-
-
-# Note: jsonlines is used for efficient batched file writing
-
 
 def set_seed(seed: int) -> None:
-    """Set random seeds for reproducibility."""
+    """Set random seeds for reproducibility.
+
+    Note: numpy and torch seeds are only set if those modules are available
+    in the current environment. This allows the script to run basic operations
+    without heavy ML dependencies installed.
+    """
     random.seed(seed)
-    # Only set numpy/torch seeds if heavy imports are loaded
-    if numpy is not None:
-        numpy.random.seed(seed)
-    if torch is not None:
+    try:
+        import numpy as np
+
+        np.random.seed(seed)
+    except ImportError:
+        pass
+    try:
+        import torch
+
         torch.manual_seed(seed)
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(seed)
+    except ImportError:
+        pass
 
 
 def _run_cmd(cmd: str) -> str | None:
@@ -131,7 +93,9 @@ def _resolve_sandbox_mode(requested: str | None) -> tuple[str | None, list[str]]
 
 def write_eval_metadata(output_dir: Path, all_results: dict, args, device: str) -> Path:
     """Write environment + configuration metadata for reproducibility."""
-    _ensure_heavy_imports()
+    # Import torch at function scope for CUDA checks
+    import torch
+
     meta: dict[str, object] = {
         "timestamp_utc": datetime.utcnow().isoformat() + "Z",
         "host": platform.node(),
@@ -202,11 +166,17 @@ def generate_samples_for_model(
     device: str = "cuda",
 ):
     """Generate samples from a model for HumanEval Rust with batching and Flash Attention v2."""
-    _ensure_heavy_imports()
+    # Import heavy ML dependencies at function scope
+    # This allows the module to be imported without these dependencies for testing
+    import jsonlines
+    import torch
+    from human_eval.data import get_human_eval_dataset, read_problems
+    from peft import AutoPeftModelForCausalLM, PeftConfig, PeftModel
+    from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Loading model: {model_path}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     # Check for Flash Attention v2
     try:
@@ -250,7 +220,7 @@ def generate_samples_for_model(
                     actual_model_path, subfolder=checkpoint_subfolder
                 )
                 tokenizer_loaded = True
-                print(f"✓ Tokenizer loaded from checkpoint subfolder")
+                print("✓ Tokenizer loaded from checkpoint subfolder")
             except Exception as e:
                 print(f"Note: Tokenizer not found in checkpoint subfolder ({e})")
 
@@ -259,7 +229,7 @@ def generate_samples_for_model(
             try:
                 tokenizer = AutoTokenizer.from_pretrained(actual_model_path)
                 tokenizer_loaded = True
-                print(f"✓ Tokenizer loaded from repo root")
+                print("✓ Tokenizer loaded from repo root")
             except Exception as e:
                 print(f"Warning: Could not load tokenizer from repo ({e})")
 
@@ -321,8 +291,6 @@ def generate_samples_for_model(
                             )
                             try:
                                 # Try to read adapter config to get base model path
-                                from peft import PeftConfig
-
                                 if checkpoint_subfolder:
                                     config = PeftConfig.from_pretrained(
                                         actual_model_path, subfolder=checkpoint_subfolder
@@ -376,8 +344,6 @@ def generate_samples_for_model(
                     print("Attempting to load base model explicitly, then applying PEFT adapter...")
                     try:
                         # Try to read adapter config to get base model path
-                        from peft import PeftConfig
-
                         if checkpoint_subfolder:
                             config = PeftConfig.from_pretrained(
                                 actual_model_path, subfolder=checkpoint_subfolder
@@ -403,7 +369,7 @@ def generate_samples_for_model(
                         except OSError as safetensors_error:
                             if "safetensors" in str(safetensors_error).lower():
                                 print(
-                                    f"Warning: Base model doesn't have safetensors, trying PyTorch format"
+                                    "Warning: Base model doesn't have safetensors, trying PyTorch format"
                                 )
                                 try:
                                     base_model = AutoModelForCausalLM.from_pretrained(
@@ -422,7 +388,7 @@ def generate_samples_for_model(
                                         or "from_tf" in str(pytorch_error).lower()
                                     ):
                                         print(
-                                            f"Warning: PyTorch format not available, using TensorFlow weights"
+                                            "Warning: PyTorch format not available, using TensorFlow weights"
                                         )
                                         base_model = AutoModelForCausalLM.from_pretrained(
                                             base_model_path,
@@ -541,7 +507,8 @@ Mark arguments as mut when you want to sort or mutate them."""
                 formatted_prompt = tokenizer.apply_chat_template(
                     messages, tokenize=False, add_generation_prompt=True
                 )
-            except:
+            except (ValueError, TypeError, KeyError):
+                # Fall back to raw prompt if chat template fails
                 formatted_prompt = enhanced_prompt
         else:
             formatted_prompt = enhanced_prompt
@@ -704,7 +671,6 @@ def _filter_bad_samples(sample_file: str) -> str:
     Ensures at least one sample per problem remains to satisfy evaluation requirements.
     Returns path to filtered sample file.
     """
-    import tempfile
     from collections import defaultdict
 
     import jsonlines
@@ -819,8 +785,8 @@ def evaluate_samples(
     timeout: float = 10.0,  # Default: H100 optimized
 ):
     """Evaluate samples and return metrics."""
-    _ensure_heavy_imports()
-    import os
+    # Import human_eval at function scope for evaluation
+    from human_eval.evaluation import evaluate_functional_correctness
 
     # Disable tokenizers parallelism warnings when using multiprocessing (evaluation phase only)
     # This prevents warnings when forking processes for parallel evaluation
@@ -1048,8 +1014,8 @@ def run_evaluation_mode(
 
 
 def main():
-    # Ensure heavy dependencies are loaded before main logic
-    _ensure_heavy_imports()
+    # Import torch at the start of main for device detection
+    import torch
 
     parser = argparse.ArgumentParser(description="HumanEval Rust evaluation")
     parser.add_argument(
@@ -1244,7 +1210,7 @@ def main():
     print("\n" + "=" * 80)
     print("All Evaluations Complete!")
     print("=" * 80)
-    print(f"\nResults organized in sub-folders:")
+    print("\nResults organized in sub-folders:")
     if run_no_policy:
         print(f"  - {output_dir / 'no-policy'}/ (no policy enforcement)")
     if run_policy:

@@ -10,7 +10,6 @@ Version: 2.0.0
 import json
 import shutil
 import sys
-import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -20,12 +19,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 # Import functions to test (after path modification)
-from evaluate_humaneval import (
-    _filter_bad_samples,
-    _resolve_sandbox_mode,
-    _run_cmd,
-    set_seed,
-)
+from evaluate_humaneval import _filter_bad_samples, _resolve_sandbox_mode, _run_cmd, set_seed
 
 
 class TestSetSeed:
@@ -57,15 +51,10 @@ class TestSetSeed:
 
     def test_set_seed_affects_numpy(self):
         """set_seed affects numpy random state when numpy is loaded."""
-        import numpy as np
-
-        # Force load heavy imports to enable numpy seeding
         try:
-            import evaluate_humaneval
-
-            evaluate_humaneval._ensure_heavy_imports()
+            import numpy as np
         except ImportError:
-            pytest.skip("Heavy dependencies (torch) not available")
+            pytest.skip("numpy not available")
 
         set_seed(42)
         arr1 = np.random.rand(5)
@@ -170,7 +159,6 @@ class TestFilterBadSamples:
         filtered_file = _filter_bad_samples(sample_file)
 
         samples = list(jsonlines.open(filtered_file))
-        completions = [s.get("completion", "") for s in samples]
 
         # Empty completions should be filtered (or kept as last resort)
         for s in samples:
@@ -227,7 +215,7 @@ class TestWriteEvalMetadata:
     def skip_if_no_torch(self):
         """Skip tests in this class if torch is not available."""
         try:
-            import torch
+            import torch  # noqa: F401
         except ImportError:
             pytest.skip("torch not available - skipping metadata tests")
 

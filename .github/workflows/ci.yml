@@ -45,7 +45,11 @@ jobs:
         run: isort --check-only scripts/ tests/
 
       - name: Lint with flake8
-        run: flake8 scripts/ tests/ --max-line-length=100 --ignore=E501,W503
+        run: |
+          # E203: whitespace before ':' - excluded for black compatibility (slice notation)
+          # E226: missing whitespace around arithmetic operator - stylistic choice
+          # E402: module level import not at top - needed for sys.path modification in tests
+          flake8 scripts/ tests/ --max-line-length=100 --ignore=E501,W503,E203,E226,E402
 
   test-python:
     name: Test Python
