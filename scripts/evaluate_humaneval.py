@@ -212,7 +212,7 @@ def generate_samples_for_model(
             if checkpoint_subfolder:
                 load_kwargs["subfolder"] = checkpoint_subfolder
                 print(f"Loading PEFT adapter from subfolder: {checkpoint_subfolder}")
-            
+
             try:
                 model = AutoPeftModelForCausalLM.from_pretrained(
                     actual_model_path,
@@ -220,15 +220,45 @@ def generate_samples_for_model(
                 )
                 print(f"✓ Loaded PEFT adapter from {actual_model_path}")
             except Exception as e:
-                # Fall back to full model loading (merged checkpoint or base model)
-                print(f"Could not load as PEFT adapter, trying as full model: {e}")
-                # Remove subfolder from kwargs for full model loading (not applicable)
-                full_model_kwargs = {k: v for k, v in load_kwargs.items() if k != "subfolder"}
-                model = AutoModelForCausalLM.from_pretrained(
-                    actual_model_path,
-                    **full_model_kwargs
-                )
-                print(f"✓ Loaded full model from {actual_model_path}")
+                # Fall back to explicitly loading the base model declared in adapter config
+                print(f"Could not load as PEFT adapter, retrying with explicit base model: {e}")
+
+                try:
+                    peft_config_kwargs = {}
+                    if checkpoint_subfolder:
+                        peft_config_kwargs["subfolder"] = checkpoint_subfolder
+
+                    peft_config = PeftConfig.from_pretrained(
+                        actual_model_path,
+                        **peft_config_kwargs,
+                    )
+                    base_model_path = peft_config.base_model_name_or_path
+                    print(f"Resolved base model from adapter config: {base_model_path}")
+
+                    base_model = AutoModelForCausalLM.from_pretrained(
+                        base_model_path,
+                        **{k: v for k, v in load_kwargs.items() if k != "subfolder"},
+                    )
+
+                    adapter_kwargs = {}
+                    if checkpoint_subfolder:
+                        adapter_kwargs["subfolder"] = checkpoint_subfolder
+
+                    model = PeftModel.from_pretrained(
+                        base_model,
+                        actual_model_path,
+                        **adapter_kwargs,
+                    )
+                    print(
+                        "✓ Loaded PEFT adapter onto resolved base model"
+                        f" (adapter: {actual_model_path}, base: {base_model_path})"
+                    )
+                except Exception as e2:
+                    print(
+                        "ERROR: Failed to load PEFT adapter after resolving base model:"
+                        f" {e2}"
+                    )
+                    raise
         else:
             # Load base model (Finetuner-style: simple and let transformers handle format detection)
             model = AutoModelForCausalLM.from_pretrained(
