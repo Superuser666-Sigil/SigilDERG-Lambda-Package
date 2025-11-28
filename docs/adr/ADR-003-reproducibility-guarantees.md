@@ -45,7 +45,8 @@ The ecosystem packages have overlapping dependency requirements that can conflic
 | sigilderg-finetuner | `>=13.7.0,<14.0.0` | `>=6.1.1,<7.0.0` |
 
 The `constraints.txt` file captures the intersection:
-```
+
+```text
 rich>=13.7.0,<14.0.0
 psutil>=6.1.1,<7.0.0
 torch>=2.4.0

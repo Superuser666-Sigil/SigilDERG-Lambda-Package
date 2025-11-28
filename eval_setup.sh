@@ -51,67 +51,73 @@ main() {
         log_warning "SKIP_ENV_CHECK=1 set; skipping OS/GPU checks. Results may not be directly comparable to Lambda baseline."
     fi
     
-    # Track errors
-    ERRORS=()
-    WARNINGS=()
-    
+    # Track errors using files to avoid subshell issues with pipes
+    ERROR_FILE=$(mktemp)
+    WARNING_FILE=$(mktemp)
+    trap 'rm -f "$ERROR_FILE" "$WARNING_FILE"' EXIT
+
+    # Helper to record errors/warnings
+    record_error() { echo "$1" >> "$ERROR_FILE"; }
+    record_warning() { echo "$1" >> "$WARNING_FILE"; }
+
     # Run setup steps with error tracking
-    {
-        install_system_deps || ERRORS+=("System dependencies")
-    } 2>&1 | tee setup.log
-    
-    {
-        install_pyenv || ERRORS+=("pyenv installation")
-    } 2>&1 | tee -a setup.log
-    
-    {
-        install_python || ERRORS+=("Python installation")
-    } 2>&1 | tee -a setup.log
-    
-    {
-        setup_venv || ERRORS+=("Virtual environment setup")
-    } 2>&1 | tee -a setup.log
-    
-    {
-        install_pytorch || ERRORS+=("PyTorch installation")
-    } 2>&1 | tee -a setup.log
-    
-    {
-        install_sigilderg_components || ERRORS+=("SigilDERG components")
-    } 2>&1 | tee -a setup.log
-    
-    {
-        install_rust || ERRORS+=("Rust installation (REQUIRED)")
-    } 2>&1 | tee -a setup.log
-    
-    {
-        verify_rust_host || ERRORS+=("Rust host verification")
-    } 2>&1 | tee -a setup.log
+    # Using process substitution instead of pipes to avoid subshell issues
+    if ! install_system_deps > >(tee setup.log) 2>&1; then
+        record_error "System dependencies"
+    fi
+
+    if ! install_pyenv > >(tee -a setup.log) 2>&1; then
+        record_error "pyenv installation"
+    fi
+
+    if ! install_python > >(tee -a setup.log) 2>&1; then
+        record_error "Python installation"
+    fi
+
+    if ! setup_venv > >(tee -a setup.log) 2>&1; then
+        record_error "Virtual environment setup"
+    fi
+
+    if ! install_pytorch > >(tee -a setup.log) 2>&1; then
+        record_error "PyTorch installation"
+    fi
+
+    if ! install_sigilderg_components > >(tee -a setup.log) 2>&1; then
+        record_error "SigilDERG components"
+    fi
+
+    if ! install_rust > >(tee -a setup.log) 2>&1; then
+        record_error "Rust installation (REQUIRED)"
+    fi
+
+    if ! verify_rust_host > >(tee -a setup.log) 2>&1; then
+        record_error "Rust host verification"
+    fi
     
     # Firejail-first sandbox verification (capture status manually)
     set +e
-    verify_firejail_sandbox 2>&1 | tee -a setup.log
-    SANDBOX_CHECK_EXIT=${PIPESTATUS[0]}
+    verify_firejail_sandbox > >(tee -a setup.log) 2>&1
+    SANDBOX_CHECK_EXIT=$?
     set -e
 
-    case $SANDBOX_CHECK_EXIT in
-        $SANDBOX_STATUS_READY)
+    case "$SANDBOX_CHECK_EXIT" in
+        "$SANDBOX_STATUS_READY")
             : # Firejail ready
             ;;
-        $SANDBOX_STATUS_UNSANDBOXED)
-            WARNINGS+=("Running without sandbox protection (user confirmed UNSANDBOXED mode)")
+        "$SANDBOX_STATUS_UNSANDBOXED")
+            record_warning "Running without sandbox protection (user confirmed UNSANDBOXED mode)"
             log_warning "Sandbox mode set to 'none'; running UNSANDBOXED."
             ;;
-        $SANDBOX_STATUS_INSTALL_FAILED)
+        "$SANDBOX_STATUS_INSTALL_FAILED")
             log_error "Firejail installation failed without approval to continue unsandboxed."
             exit 1
             ;;
-        $SANDBOX_STATUS_USER_DECLINED)
+        "$SANDBOX_STATUS_USER_DECLINED")
             log_error "Sandboxing declined; setup halted per user input."
             exit 1
             ;;
         *)
-            ERRORS+=("Sandbox verification returned unexpected status")
+            record_error "Sandbox verification returned unexpected status"
             ;;
     esac
 
@@ -120,35 +126,39 @@ main() {
     else
         log_warning "Sandbox mode not determined; evaluation may run UNSANDBOXED."
     fi
-    
-    {
-        verify_rust_in_sandbox || ERRORS+=("Rust sandbox verification")
-    } 2>&1 | tee -a setup.log
-    
-    {
-        check_tmux || WARNINGS+=("tmux check")
-    } 2>&1 | tee -a setup.log
+
+    if ! verify_rust_in_sandbox > >(tee -a setup.log) 2>&1; then
+        record_error "Rust sandbox verification"
+    fi
+
+    if ! check_tmux > >(tee -a setup.log) 2>&1; then
+        record_warning "tmux check"
+    fi
     
     # Install GitHub CLI (run directly to allow interactive auth)
     log_info "Installing/checking GitHub CLI..."
-    if install_gh 2>&1 | tee -a setup.log; then
+    if install_gh > >(tee -a setup.log) 2>&1; then
         # Configure git credential helper after successful GitHub CLI authentication
         log_info "Configuring git credential helper..."
         git config --global credential.helper store || log_warning "Failed to configure git credential helper"
         log_success "Git credential helper configured"
     else
-        WARNINGS+=("GitHub CLI installation/authentication")
+        record_warning "GitHub CLI installation/authentication"
     fi
-    
+
     # Install HuggingFace CLI (run directly to allow interactive auth)
     log_info "Installing/checking HuggingFace CLI..."
-    if ! install_hf_cli 2>&1 | tee -a setup.log; then
-        WARNINGS+=("HuggingFace CLI installation/authentication")
+    if ! install_hf_cli > >(tee -a setup.log) 2>&1; then
+        record_warning "HuggingFace CLI installation/authentication"
     fi
-    
-    {
-        create_evaluation_script || ERRORS+=("Evaluation script creation")
-    } 2>&1 | tee -a setup.log
+
+    if ! create_evaluation_script > >(tee -a setup.log) 2>&1; then
+        record_error "Evaluation script creation"
+    fi
+
+    # Read errors and warnings from files
+    mapfile -t ERRORS < "$ERROR_FILE"
+    mapfile -t WARNINGS < "$WARNING_FILE"
     
     # Report status
     echo ""

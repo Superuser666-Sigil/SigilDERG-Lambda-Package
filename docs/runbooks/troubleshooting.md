@@ -7,6 +7,7 @@
 **Symptom:** Script exits with "Unsupported OS" or "CUDA GPU not detected"
 
 **Solution:**
+
 ```bash
 # Bypass environment checks (use with caution)
 SKIP_ENV_CHECK=1 ./eval_setup.sh
@@ -20,13 +21,15 @@ SKIP_ENV_CHECK=1 ./eval_setup.sh
 
 **Solutions:**
 
-1. Retry installation:
+Retry installation:
+
 ```bash
 sudo apt-get update
 sudo apt-get install -y firejail
 ```
 
-2. Run without sandbox (DANGEROUS for untrusted code):
+Or run without sandbox (DANGEROUS for untrusted code):
+
 ```bash
 SANDBOX_MODE=none ./eval_setup.sh
 ```
@@ -37,11 +40,10 @@ SANDBOX_MODE=none ./eval_setup.sh
 
 **Cause:** Firejail restricts access to the home directory by default, so it cannot access `~/.cargo/bin/rustc` where Rust is typically installed.
 
-**Solutions:**
+**Automatic Fix (Recommended):** The setup script now automatically configures Firejail to allow access to `~/.cargo` using `--whitelist` and preserves the PATH environment variable. This should work automatically.
 
-1. **Automatic Fix (Recommended):** The setup script now automatically configures Firejail to allow access to `~/.cargo` using `--whitelist` and preserves the PATH environment variable. This should work automatically.
+**Manual Verification:** If the automatic fix doesn't work, verify Rust is installed:
 
-2. **Manual Verification:** If the automatic fix doesn't work, verify Rust is installed:
 ```bash
 # Check if rustc is available
 rustc --version
@@ -51,18 +53,21 @@ source ~/.cargo/env
 rustc --version
 ```
 
-3. **Check Firejail Version:** Older Firejail versions may not support `--whitelist`. Update Firejail:
+**Check Firejail Version:** Older Firejail versions may not support `--whitelist`. Update Firejail:
+
 ```bash
 sudo apt-get update
 sudo apt-get install --upgrade firejail
 ```
 
-4. **Alternative:** If Firejail configuration continues to fail, you can run without sandboxing (DANGEROUS for untrusted code):
+**Alternative:** If Firejail configuration continues to fail, you can run without sandboxing (DANGEROUS for untrusted code):
+
 ```bash
 SANDBOX_MODE=none ./eval_setup.sh
 ```
 
 **Technical Details:**
+
 - Rust installs to `~/.cargo/bin/` by default
 - Firejail restricts home directory access for security
 - The fix uses `firejail --whitelist="$HOME/.cargo" --env=PATH` to allow access
@@ -74,14 +79,16 @@ SANDBOX_MODE=none ./eval_setup.sh
 
 **Solutions:**
 
-1. Accept model license at https://huggingface.co/meta-llama/Meta-Llama-3.1-8B-Instruct
+Accept model license at <https://huggingface.co/meta-llama/Meta-Llama-3.1-8B-Instruct>
 
-2. Re-authenticate:
+Re-authenticate:
+
 ```bash
 huggingface-cli login
 ```
 
-3. Verify access:
+Verify access:
+
 ```bash
 huggingface-cli whoami
 ```
@@ -92,17 +99,20 @@ huggingface-cli whoami
 
 **Solutions:**
 
-1. Check CUDA version:
+Check CUDA version:
+
 ```bash
 nvidia-smi | head -3
 ```
 
-2. Verify PyTorch CUDA:
+Verify PyTorch CUDA:
+
 ```bash
 python -c "import torch; print(torch.cuda.is_available())"
 ```
 
-3. Reinstall matching PyTorch:
+Reinstall matching PyTorch:
+
 ```bash
 pip install torch==2.4.0+cu124 -f https://download.pytorch.org/whl/torch_stable.html
 ```
@@ -113,12 +123,14 @@ pip install torch==2.4.0+cu124 -f https://download.pytorch.org/whl/torch_stable.
 
 **Solutions:**
 
-1. Reduce batch size:
+Reduce batch size:
+
 ```bash
 python evaluate_humaneval.py --batch-size 16
 ```
 
-2. Reduce samples per task:
+Reduce samples per task:
+
 ```bash
 python evaluate_humaneval.py --num-samples 50
 ```
@@ -129,12 +141,14 @@ python evaluate_humaneval.py --num-samples 50
 
 **Solutions:**
 
-1. Increase timeout:
+Increase timeout:
+
 ```bash
 python evaluate_humaneval.py --timeout 30
 ```
 
-2. Reduce workers (less contention):
+Reduce workers (less contention):
+
 ```bash
 python evaluate_humaneval.py --n-workers 12
 ```
@@ -145,7 +159,8 @@ python evaluate_humaneval.py --n-workers 12
 
 **Solutions:**
 
-1. Force reinstall ecosystem packages:
+Force reinstall ecosystem packages:
+
 ```bash
 pip install --force-reinstall --no-cache-dir \
     "human-eval-rust>=2.3.0" \
@@ -153,7 +168,8 @@ pip install --force-reinstall --no-cache-dir \
     "sigilderg-finetuner>=3.0.0"
 ```
 
-2. Check installed versions:
+Check installed versions:
+
 ```bash
 pip show human-eval-rust sigil-pipeline sigilderg-finetuner
 ```
@@ -164,17 +180,20 @@ pip show human-eval-rust sigil-pipeline sigilderg-finetuner
 
 **Solutions:**
 
-1. List sessions:
+List sessions:
+
 ```bash
 tmux list-sessions
 ```
 
-2. Check if evaluation script is running:
+Check if evaluation script is running:
+
 ```bash
 ps aux | grep evaluate_humaneval
 ```
 
-3. Restart evaluation:
+Restart evaluation:
+
 ```bash
 source ~/.venvs/sigilderg-humaneval/bin/activate
 python ~/.venvs/sigilderg-humaneval/evaluate_humaneval.py --output-dir ./humaneval_results
@@ -236,7 +255,6 @@ grep -i warning setup.log
 
 If issues persist:
 
-1. Check `setup.log` for detailed error messages
-2. Review `eval_metadata.json` for environment details
-3. Open an issue at https://github.com/Superuser666-Sigil/SigilDERG-Lambda-Package
-
+- Check `setup.log` for detailed error messages
+- Review `eval_metadata.json` for environment details
+- Open an issue at <https://github.com/Superuser666-Sigil/SigilDERG-Lambda-Package>

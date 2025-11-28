@@ -23,13 +23,15 @@ All issues have been resolved using best practices for sandbox configuration and
 The Firejail sandbox used `--private` flag which creates an isolated home directory, blocking access to `~/.cargo/bin/rustc` where Rust is typically installed via rustup.
 
 **Error observed:**
-```
+
+```text
 Error: Rust not found (Firejail mode checks host Rust)
 ```
 
 ### Root Cause
 
 The `--private` flag in Firejail creates a new, empty home directory for the sandboxed process. This means:
+
 - `$HOME/.cargo/bin/rustc` is not accessible
 - `$HOME/.rustup` toolchain files are not accessible
 - The sandbox cannot compile Rust code
@@ -48,6 +50,7 @@ Replace `--private` with targeted `--whitelist` directives:
 ```
 
 This approach:
+
 - Grants read-only access only to Rust toolchain directories
 - Maintains isolation for all other home directory contents
 - Preserves security while enabling compilation
@@ -72,7 +75,7 @@ firejail --whitelist="$HOME/.cargo" --whitelist="$HOME/.rustup" \
 
 ## Issue 2: Dependency Conflicts
 
-### Problem
+### The Problem
 
 Installing sigil-pipeline and sigilderg-finetuner in sequence caused version conflicts:
 
@@ -81,11 +84,11 @@ Installing sigil-pipeline and sigilderg-finetuner in sequence caused version con
 | `psutil` | `<7.0.0` | `>=6.1.1` (no upper bound) | Upgraded to 7.x, broke pipeline |
 | `rich` | `<14.0.0` | `>=13.7.0` (no upper bound) | Upgraded to 14.x, broke pipeline |
 
-### Root Cause
+### The Root Cause
 
 The packages were installed sequentially without coordinated version constraints. pip's dependency resolver optimized each package independently, potentially upgrading shared dependencies beyond compatible ranges.
 
-### Solution
+### The Solution
 
 1. **Create unified constraints file** (`constraints.txt`)
 2. **Align dependency bounds** in sigilderg-finetuner
@@ -93,7 +96,7 @@ The packages were installed sequentially without coordinated version constraints
 
 ### constraints.txt
 
-```
+```text
 # Unified dependency constraints for SigilDERG ecosystem
 # These bounds represent the intersection of compatible versions
 
@@ -105,7 +108,7 @@ psutil>=6.1.1,<7.0.0
 torch>=2.4.0
 ```
 
-### Files Modified
+### Modified Files
 
 | File | Change |
 |------|--------|
@@ -132,21 +135,21 @@ pip check
 
 ## Issue 3: PyTorch/torchaudio Mismatch
 
-### Problem
+### Problem Description
 
 Installing sigilderg-finetuner after torchaudio caused PyTorch version mismatch:
 
-```
+```text
 torchaudio 2.7.1 requires torch==2.7.1
 sigilderg-finetuner upgraded torch to 2.8.0
 Result: torchaudio broken
 ```
 
-### Root Cause
+### Root Cause Analysis
 
 PyTorch and related packages (torchaudio, torchvision) must have matching versions. Installing packages in wrong sequence allows pip to upgrade torch independently.
 
-### Solution
+### Applied Solution
 
 1. **Install PyTorch first** with CUDA-specific index URL
 2. **Constraint torch version** in constraints.txt
@@ -162,7 +165,7 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 pip install -c constraints.txt sigil-pipeline sigilderg-finetuner human-eval-rust
 ```
 
-### Files Modified
+### Issue 3 Files Changed
 
 | File | Change |
 |------|--------|
@@ -208,7 +211,7 @@ pip install -r requirements.lock
 
 ### requirements.in
 
-```
+```text
 # SigilDERG Ecosystem packages
 sigil-pipeline>=2.3.0
 sigilderg-finetuner>=3.0.0

@@ -52,7 +52,7 @@ Running without a sandbox is **strongly discouraged** and requires:
 If you discover a security vulnerability:
 
 1. **Do NOT** open a public issue
-2. Email: davetmire85@gmail.com
+2. Email: <davetmire85@gmail.com>
 3. Include:
    - Description of the vulnerability
    - Steps to reproduce
@@ -115,6 +115,6 @@ not pursue legal action against researchers who:
 
 ## Contact
 
-- **Security issues**: davetmire85@gmail.com
-- **General issues**: https://github.com/Superuser666-Sigil/SigilDERG-Lambda-Package/issues
+- **Security issues**: <davetmire85@gmail.com>
+- **General issues**: <https://github.com/Superuser666-Sigil/SigilDERG-Lambda-Package/issues>
 

@@ -56,8 +56,16 @@ class TestSetSeed:
         assert values1 != values2
 
     def test_set_seed_affects_numpy(self):
-        """set_seed affects numpy random state."""
+        """set_seed affects numpy random state when numpy is loaded."""
         import numpy as np
+
+        # Force load heavy imports to enable numpy seeding
+        try:
+            import evaluate_humaneval
+
+            evaluate_humaneval._ensure_heavy_imports()
+        except ImportError:
+            pytest.skip("Heavy dependencies (torch) not available")
 
         set_seed(42)
         arr1 = np.random.rand(5)
@@ -139,7 +147,7 @@ class TestFilterBadSamples:
         import jsonlines
 
         samples = [
-            {"task_id": "task_1", "completion": "fn main() { println!(\"hello\"); }"},
+            {"task_id": "task_1", "completion": 'fn main() { println!("hello"); }'},
             {"task_id": "task_2", "completion": ""},  # Empty - should be filtered
             {"task_id": "task_3", "completion": "x"},  # Too short - should be filtered
             {"task_id": "task_4", "completion": "fn test() { let x = 1; }"},
@@ -215,6 +223,14 @@ class TestFilterBadSamples:
 class TestWriteEvalMetadata:
     """Tests for write_eval_metadata() function."""
 
+    @pytest.fixture(autouse=True)
+    def skip_if_no_torch(self):
+        """Skip tests in this class if torch is not available."""
+        try:
+            import torch
+        except ImportError:
+            pytest.skip("torch not available - skipping metadata tests")
+
     def test_metadata_file_created(self, tmp_path):
         """Metadata file is created."""
         from evaluate_humaneval import write_eval_metadata
@@ -250,4 +266,3 @@ class TestWriteEvalMetadata:
         assert "device" in metadata
         assert "packages" in metadata
         assert "results_present" in metadata
-
