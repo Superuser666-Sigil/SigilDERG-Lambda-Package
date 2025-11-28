@@ -16,7 +16,7 @@ from importlib.metadata import version as pkg_version
 # Minimum version requirements
 REQUIREMENTS: dict[str, str] = {
     "human-eval-rust": "2.1.0",
-    "sigil-pipeline": "2.1.0",
+    "sigil-pipeline": "2.2.0",
     "sigilderg-finetuner": "2.9.0",
 }
 

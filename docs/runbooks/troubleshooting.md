@@ -112,7 +112,7 @@ python evaluate_humaneval.py --n-workers 12
 ```bash
 pip install --force-reinstall --no-cache-dir \
     "human-eval-rust>=2.1.0" \
-    "sigil-pipeline>=2.1.0" \
+    "sigil-pipeline>=2.2.0" \
     "sigilderg-finetuner>=2.9.0"
 ```
 

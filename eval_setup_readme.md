@@ -83,7 +83,7 @@ At a high level, the script:
 
    - Installs **`human-eval-rust`** from PyPI with a minimum version of **2.1.0** (required for Firejail-first sandboxing, enhanced prompt format, result schema, compile rate tracking, main-free rate tracking, rustc preflight checks, never-dropping completions, and bug fixes), and verifies the version.
      - If PyPI fails or the version is wrong, it falls back to installing directly from the GitHub repo.
-   - Installs **`sigil-pipeline`** (minimum version 2.1.0) and **`sigilderg-finetuner`** (minimum version 2.9.0) from PyPI first, with GitHub fallbacks if needed.
+   - Installs **`sigil-pipeline`** (minimum version 2.2.0) and **`sigilderg-finetuner`** (minimum version 2.9.0) from PyPI first, with GitHub fallbacks if needed.
    - Verifies that key modules can be imported inside the venv.
 
 6. **Installs Rust and checks toolchain**

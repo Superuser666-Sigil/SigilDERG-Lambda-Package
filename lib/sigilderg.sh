@@ -23,7 +23,7 @@ source "$SCRIPT_DIR/lib/python_env.sh"
 
 # Minimum version requirements for ecosystem components
 MIN_HUMAN_EVAL_RUST_VERSION="2.1.0"
-MIN_SIGIL_PIPELINE_VERSION="2.1.0"
+MIN_SIGIL_PIPELINE_VERSION="2.2.0"
 MIN_SIGILDERG_FINETUNER_VERSION="2.9.0"
 
 # Install SigilDERG components
@@ -107,7 +107,7 @@ install_sigilderg_components() {
     log_info "Installing sigil-pipeline (requires >=${MIN_SIGIL_PIPELINE_VERSION})..."
     # Uninstall old version first to ensure clean install
     "$PIP_CMD" uninstall -y sigil-pipeline 2>/dev/null || true
-    if "$PIP_CMD" install --force-reinstall --no-cache-dir "sigil-pipeline>=${MIN_SIGIL_PIPELINE_VERSION}" 2>&1 | tee -a setup.log; then
+    if "$PIP_CMD" install --force-reinstall --no-cache-dir "sigil-pipeline>=2.2.0" 2>&1 | tee -a setup.log; then
         # Verify installation succeeded
         if "$VENV_DIR/bin/python" -c "import sigil_pipeline" 2>/dev/null; then
             INSTALLED_VERSION=$(_get_package_version "sigil_pipeline" "sigil-pipeline")

@@ -27,7 +27,7 @@ We implement **multi-layer reproducibility guarantees**:
 - Python version pinned to 3.12.11 via pyenv
 - Ecosystem packages have minimum version requirements:
   - `human-eval-rust >= 2.1.0`
-  - `sigil-pipeline >= 2.1.0`
+  - `sigil-pipeline >= 2.2.0`
   - `sigilderg-finetuner >= 2.9.0`
 - PyTorch version selected based on detected CUDA version
 
