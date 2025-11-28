@@ -64,6 +64,11 @@ install_rust() {
 
 # Verify Rust toolchain is available on host
 verify_rust_host() {
+    # Source cargo env if it exists (needed for rustc to be in PATH)
+    if [ -f "$HOME/.cargo/env" ]; then
+        . "$HOME/.cargo/env" 2>/dev/null || true
+    fi
+    
     if ! command_exists rustc; then
         error_exit "Rust toolchain not available on host. Run install_rust first."
     fi
