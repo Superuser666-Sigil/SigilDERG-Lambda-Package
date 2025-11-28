@@ -91,13 +91,16 @@ verify_docker_access() {
         return 1
     fi
     
-    # First check if Docker daemon is running with docker info
-    if ! docker info >/dev/null 2>&1; then
-        DOCKER_ERROR=$(docker info 2>&1)
+    # First check if Docker daemon is running with docker info (with timeout to prevent hanging)
+    if ! timeout 5 docker info >/dev/null 2>&1; then
+        DOCKER_ERROR=$(timeout 5 docker info 2>&1 || echo "timeout or error")
         if echo "$DOCKER_ERROR" | grep -q "permission denied\|connect.*docker.sock"; then
             log_error "Docker permission denied: user does not have access to Docker daemon"
             log_info "Error details: $DOCKER_ERROR"
             return 2  # Permission denied
+        elif echo "$DOCKER_ERROR" | grep -q "timeout"; then
+            log_warning "Docker info command timed out (may indicate permission or connection issue)"
+            return 2  # Treat timeout as permission issue
         else
             log_warning "Docker daemon not running or not accessible"
             log_info "Error details: $DOCKER_ERROR"
@@ -105,17 +108,20 @@ verify_docker_access() {
         fi
     fi
     
-    # Test Docker access with a simple command
-    if docker ps >/dev/null 2>&1; then
+    # Test Docker access with a simple command (with timeout to prevent hanging)
+    if timeout 5 docker ps >/dev/null 2>&1; then
         log_success "Docker access verified (docker ps succeeded)"
         return 0
     else
         # Check if it's a permission issue
-        DOCKER_PS_ERROR=$(docker ps 2>&1)
+        DOCKER_PS_ERROR=$(timeout 5 docker ps 2>&1 || echo "timeout or error")
         if echo "$DOCKER_PS_ERROR" | grep -q "permission denied\|connect.*docker.sock"; then
             log_error "Docker permission denied: user does not have access to Docker daemon"
             log_info "Error details: $DOCKER_PS_ERROR"
             return 2  # Permission denied
+        elif echo "$DOCKER_PS_ERROR" | grep -q "timeout"; then
+            log_warning "Docker ps command timed out (may indicate permission issue)"
+            return 2  # Treat timeout as permission issue
         else
             log_warning "Docker command failed (may not be running or accessible)"
             log_info "Error details: $DOCKER_PS_ERROR"
@@ -347,11 +353,14 @@ check_docker_with_verification() {
     fi
     
     # Check if we can access Docker (this checks both daemon and permissions)
-    if ! docker info >/dev/null 2>&1; then
+    # Use timeout to prevent hanging on permission-denied connections
+    if ! timeout 5 docker info >/dev/null 2>&1; then
         if [ "$DOCKER_SERVICE_RUNNING" = true ]; then
             # Service is running but we can't access it - this is a permission issue
             log_warning "Docker service is running but access denied (permission issue)"
             # Skip trying to start Docker, go straight to permission handling
+            # Don't call verify_docker_access() here as it will hang - go straight to fallback
+            DOCKER_ACCESS_FAILED=true
         else
             # Service is not running - try to start it
             log_warning "Docker service is not running. Attempting to start Docker..."
@@ -407,9 +416,17 @@ check_docker_with_verification() {
         fi
     fi
     
-    # Verify Docker access with docker ps
-    verify_docker_access
-    verify_result=$?
+    # If we already detected a permission issue, skip verify_docker_access (it will hang)
+    # and go straight to fallback handling
+    if [ "${DOCKER_ACCESS_FAILED:-false}" = true ]; then
+        log_info "Skipping Docker access verification (permission issue already detected)"
+        verify_result=2  # Permission denied
+    else
+        # Verify Docker access with docker ps
+        verify_docker_access
+        verify_result=$?
+    fi
+    
     case $verify_result in
         0)
             log_success "Docker is available, running, and accessible"
