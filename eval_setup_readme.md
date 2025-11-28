@@ -65,7 +65,7 @@ At a high level, the script:
 
 5. **Installs the SigilDERG ecosystem and HumanEval-Rust**
 
-   - Installs **`human-eval-rust`** from PyPI with a minimum version of **1.3.8** (required for H100 optimizations, sandbox detection fix, main() function removal fix, Docker image pre-build, sample coverage fixes, safetensors fallback, TensorFlow weights support, and relaxed filtering: 4GB memory, 24 workers, 10s timeout, circular import fix, f-string syntax fix, sandbox auto-detect, main() regex fix), and verifies the version.
+   - Installs **`human-eval-rust`** from PyPI with a minimum version of **1.4.1** (required for enhanced prompt format, result schema, compile rate tracking, main-free rate tracking, rustc preflight checks, and never-dropping completions), and verifies the version.
      - If PyPI fails or the version is wrong, it falls back to installing directly from the GitHub repo.
    - Installs **`sigil-pipeline`** (minimum version 1.2.1 for termcolor compatibility) and **`sigilderg-finetuner`** from PyPI first, with GitHub fallbacks if needed.
    - Verifies that key modules can be imported inside the venv.
