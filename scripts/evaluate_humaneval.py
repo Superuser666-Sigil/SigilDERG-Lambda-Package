@@ -199,88 +199,46 @@ def generate_samples_for_model(
         attn_implementation = "flash_attention_2" if use_flash_attention else "sdpa"
         
         if is_peft:
-            # For PEFT adapters, always load base model explicitly first (more reliable)
-            # Read adapter config to get base model path
+            # Use Finetuner's simple approach: try PEFT adapter first, fallback to full model
+            # This matches the pattern used in rust-qlora/gen_eval_samples.py and expert_iteration.py
+            load_kwargs = {
+                "device_map": "auto",
+                "dtype": torch.bfloat16,
+                "trust_remote_code": True,
+                "attn_implementation": attn_implementation,
+            }
+            
+            # Add subfolder parameter if we have a checkpoint subdirectory (HuggingFace format)
             if checkpoint_subfolder:
-                config = PeftConfig.from_pretrained(actual_model_path, subfolder=checkpoint_subfolder)
-            else:
-                config = PeftConfig.from_pretrained(actual_model_path)
-            
-            base_model_path = config.base_model_name_or_path
-            print(f"Loading base model: {base_model_path}")
-            
-            # Load base model explicitly (same approach that works for base model evaluation)
-            # Try safetensors first, fall back to PyTorch if not available
-            try:
-                base_model = AutoModelForCausalLM.from_pretrained(
-                    base_model_path,
-                    dtype=torch.bfloat16,
-                    device_map="auto",
-                    trust_remote_code=True,
-                    attn_implementation=attn_implementation,
-                    from_tf=False,
-                    use_safetensors=True,
-                )
-            except OSError as safetensors_error:
-                if "safetensors" in str(safetensors_error).lower():
-                    print(f"Warning: Base model doesn't have safetensors, trying PyTorch format")
-                    base_model = AutoModelForCausalLM.from_pretrained(
-                        base_model_path,
-                        dtype=torch.bfloat16,
-                        device_map="auto",
-                        trust_remote_code=True,
-                        attn_implementation=attn_implementation,
-                        from_tf=False,
-                        use_safetensors=False,
-                    )
-                else:
-                    raise
-            
-            print(f"✓ Base model loaded successfully")
-            
-            # Now load PEFT adapter
-            if checkpoint_subfolder:
+                load_kwargs["subfolder"] = checkpoint_subfolder
                 print(f"Loading PEFT adapter from subfolder: {checkpoint_subfolder}")
-                model = PeftModel.from_pretrained(
-                    base_model,
-                    actual_model_path,
-                    subfolder=checkpoint_subfolder,
-                )
-            else:
-                print(f"Loading PEFT adapter from: {actual_model_path}")
-                model = PeftModel.from_pretrained(
-                    base_model,
-                    actual_model_path,
-                )
-            print("✓ PEFT adapter loaded successfully")
-        else:
-            # Try safetensors first, fall back to PyTorch if not available
+            
             try:
-                model = AutoModelForCausalLM.from_pretrained(
-                    model_path,
-                    dtype=torch.bfloat16,
-                    device_map="auto",
-                    trust_remote_code=True,
-                    attn_implementation=attn_implementation,
-                    from_tf=False,  # Explicitly prevent TensorFlow loading
-                    use_safetensors=True,  # Prefer SafeTensors format
+                model = AutoPeftModelForCausalLM.from_pretrained(
+                    actual_model_path,
+                    **load_kwargs
                 )
-            except OSError as e:
-                if "safetensors" in str(e).lower():
-                    print(f"Warning: SafeTensors not available: {e}")
-                    print("Retrying with PyTorch format (use_safetensors=False)...")
-                    model = AutoModelForCausalLM.from_pretrained(
-                        model_path,
-                        dtype=torch.bfloat16,
-                        device_map="auto",
-                        trust_remote_code=True,
-                        attn_implementation=attn_implementation,
-                        from_tf=False,
-                        use_safetensors=False,
-                    )
-                    print("✓ Successfully loaded model using PyTorch format")
-                else:
-                    raise
+                print(f"✓ Loaded PEFT adapter from {actual_model_path}")
+            except Exception as e:
+                # Fall back to full model loading (merged checkpoint or base model)
+                print(f"Could not load as PEFT adapter, trying as full model: {e}")
+                # Remove subfolder from kwargs for full model loading (not applicable)
+                full_model_kwargs = {k: v for k, v in load_kwargs.items() if k != "subfolder"}
+                model = AutoModelForCausalLM.from_pretrained(
+                    actual_model_path,
+                    **full_model_kwargs
+                )
+                print(f"✓ Loaded full model from {actual_model_path}")
+        else:
+            # Load base model (Finetuner-style: simple and let transformers handle format detection)
+            model = AutoModelForCausalLM.from_pretrained(
+                model_path,
+                device_map="auto",
+                dtype=torch.bfloat16,
+                trust_remote_code=True,
+                attn_implementation=attn_implementation,
+            )
+            print(f"✓ Loaded base model from {model_path}")
     except Exception as e:
         print(f"ERROR: Failed to load model: {e}")
         print(f"Model path: {model_path}")
