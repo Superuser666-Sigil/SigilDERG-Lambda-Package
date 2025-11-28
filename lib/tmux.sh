@@ -53,9 +53,13 @@ run_evaluation() {
         )
         if [ -n "${SANDBOX_MODE:-}" ]; then
             PY_ARGS+=( --sandbox-mode "$SANDBOX_MODE" )
-            log_info "Using sandbox mode: $SANDBOX_MODE"
+            if [ "$SANDBOX_MODE" = "none" ]; then
+                log_warning "Sandbox mode set to 'none'; running UNSANDBOXED."
+            else
+                log_info "Using sandbox mode: $SANDBOX_MODE"
+            fi
         else
-            log_info "Sandbox mode: auto-detect (will use Docker if available, otherwise Firejail or none)"
+            log_info "Sandbox mode: auto-detect (Firejail preferred; will run UNSANDBOXED if unavailable)"
         fi
 
         python "${PY_ARGS[@]}" || error_exit "Evaluation failed"
@@ -104,9 +108,13 @@ run_evaluation() {
     # Add sandbox mode if specified (from environment or fallback selection)
     if [ -n "${SANDBOX_MODE:-}" ]; then
         EVAL_CMD="$EVAL_CMD --sandbox-mode $SANDBOX_MODE"
-        log_info "Using sandbox mode: $SANDBOX_MODE"
+        if [ "$SANDBOX_MODE" = "none" ]; then
+            log_warning "Sandbox mode set to 'none'; running UNSANDBOXED."
+        else
+            log_info "Using sandbox mode: $SANDBOX_MODE"
+        fi
     else
-        log_info "Sandbox mode: auto-detect (will use Docker if available, otherwise Firejail or none)"
+        log_info "Sandbox mode: auto-detect (Firejail preferred; will run UNSANDBOXED if unavailable)"
     fi
     
     # Note: No --no-policy or --policy-only flags needed - script runs both automatically
@@ -136,16 +144,6 @@ if ! command -v rustc >/dev/null 2>&1; then
     echo "ERROR: rustc not found in PATH. Evaluation cannot proceed."
     echo "Please ensure Rust is installed and ~/.cargo/env is sourced."
     exit 1
-fi
-
-# Activate docker group if user is in docker group (for Docker sandboxing)
-DOCKER_GROUP_ACTIVE=false
-if groups | grep -q docker; then
-    # Test if Docker works with docker group
-    if newgrp docker -c "docker ps >/dev/null 2>&1" 2>/dev/null; then
-        DOCKER_GROUP_ACTIVE=true
-        echo "Docker group detected and verified - Docker sandboxing will be available"
-    fi
 fi
 
 # Change to home directory
@@ -192,15 +190,8 @@ EVAL_START_TIME=\$(date +%s)
 echo "Evaluation started at: \$(date)"
 
 # Run the evaluation command (already uses venv python explicitly)
-# If docker group is active and sandbox mode is docker, run with newgrp docker
-if [ "\$DOCKER_GROUP_ACTIVE" = "true" ] && [ "${SANDBOX_MODE:-}" = "docker" ]; then
-    echo "Running evaluation with docker group active for Docker sandboxing..."
-    newgrp docker -c "$EVAL_CMD"
-    EXIT_CODE=\$?
-else
-    $EVAL_CMD
-    EXIT_CODE=\$?
-fi
+$EVAL_CMD
+EXIT_CODE=\$?
 
 # Calculate duration and estimated cost
 EVAL_END_TIME=\$(date +%s)

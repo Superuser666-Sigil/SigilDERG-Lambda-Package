@@ -100,6 +100,7 @@ main() {
             ;;
         $SANDBOX_STATUS_UNSANDBOXED)
             WARNINGS+=("Running without sandbox protection (user confirmed UNSANDBOXED mode)")
+            log_warning "Sandbox mode set to 'none'; running UNSANDBOXED."
             ;;
         $SANDBOX_STATUS_INSTALL_FAILED)
             log_error "Firejail installation failed without approval to continue unsandboxed."
@@ -113,6 +114,12 @@ main() {
             ERRORS+=("Sandbox verification returned unexpected status")
             ;;
     esac
+
+    if [ -n "${SANDBOX_MODE:-}" ]; then
+        log_info "Selected sandbox mode: ${SANDBOX_MODE}"
+    else
+        log_warning "Sandbox mode not determined; evaluation may run UNSANDBOXED."
+    fi
     
     {
         verify_rust_in_sandbox || ERRORS+=("Rust sandbox verification")
