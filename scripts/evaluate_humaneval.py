@@ -199,76 +199,191 @@ def generate_samples_for_model(
         attn_implementation = "flash_attention_2" if use_flash_attention else "sdpa"
         
         if is_peft:
-            # Use Finetuner's simple approach: try PEFT adapter first, fallback to full model
-            # This matches the pattern used in rust-qlora/gen_eval_samples.py and expert_iteration.py
             load_kwargs = {
-                "device_map": "auto",
                 "dtype": torch.bfloat16,
+                "device_map": "auto",
                 "trust_remote_code": True,
                 "attn_implementation": attn_implementation,
+                "from_tf": False,  # Explicitly prevent TensorFlow loading
+                "use_safetensors": True,  # Prefer SafeTensors format
             }
             
-            # Add subfolder parameter if we have a checkpoint subdirectory (HuggingFace format)
+            # If we have a checkpoint subfolder, use it
             if checkpoint_subfolder:
                 load_kwargs["subfolder"] = checkpoint_subfolder
                 print(f"Loading PEFT adapter from subfolder: {checkpoint_subfolder}")
-
+            
             try:
                 model = AutoPeftModelForCausalLM.from_pretrained(
                     actual_model_path,
                     **load_kwargs
                 )
-                print(f"✓ Loaded PEFT adapter from {actual_model_path}")
-            except Exception as e:
-                # Fall back to explicitly loading the base model declared in adapter config
-                print(f"Could not load as PEFT adapter, retrying with explicit base model: {e}")
-
-                try:
-                    peft_config_kwargs = {}
-                    if checkpoint_subfolder:
-                        peft_config_kwargs["subfolder"] = checkpoint_subfolder
-
-                    peft_config = PeftConfig.from_pretrained(
-                        actual_model_path,
-                        **peft_config_kwargs,
-                    )
-                    base_model_path = peft_config.base_model_name_or_path
-                    print(f"Resolved base model from adapter config: {base_model_path}")
-
-                    base_model = AutoModelForCausalLM.from_pretrained(
-                        base_model_path,
-                        **{k: v for k, v in load_kwargs.items() if k != "subfolder"},
-                    )
-
-                    adapter_kwargs = {}
-                    if checkpoint_subfolder:
-                        adapter_kwargs["subfolder"] = checkpoint_subfolder
-
-                    model = PeftModel.from_pretrained(
-                        base_model,
-                        actual_model_path,
-                        **adapter_kwargs,
-                    )
-                    print(
-                        "✓ Loaded PEFT adapter onto resolved base model"
-                        f" (adapter: {actual_model_path}, base: {base_model_path})"
-                    )
-                except Exception as e2:
-                    print(
-                        "ERROR: Failed to load PEFT adapter after resolving base model:"
-                        f" {e2}"
-                    )
+            except OSError as e:
+                # If loading fails with safetensors error, try without safetensors
+                if "safetensors" in str(e).lower():
+                    print(f"Warning: SafeTensors not available: {e}")
+                    print("Retrying with PyTorch format (use_safetensors=False)...")
+                    load_kwargs_no_safe = load_kwargs.copy()
+                    load_kwargs_no_safe["use_safetensors"] = False
+                    try:
+                        model = AutoPeftModelForCausalLM.from_pretrained(
+                            actual_model_path,
+                            **load_kwargs_no_safe
+                        )
+                        print("✓ Successfully loaded model using PyTorch format")
+                    except OSError as e2:
+                        # If PyTorch format also fails and suggests TensorFlow, try TensorFlow
+                        if "tensorflow" in str(e2).lower() or "from_tf" in str(e2).lower():
+                            print(f"Warning: PyTorch format not available, trying TensorFlow weights: {e2}")
+                            print("Attempting to load base model explicitly with TensorFlow weights, then applying PEFT adapter...")
+                            try:
+                                # Try to read adapter config to get base model path
+                                from peft import PeftConfig
+                                if checkpoint_subfolder:
+                                    config = PeftConfig.from_pretrained(actual_model_path, subfolder=checkpoint_subfolder)
+                                else:
+                                    config = PeftConfig.from_pretrained(actual_model_path)
+                                
+                                base_model_path = config.base_model_name_or_path
+                                print(f"Loading base model from TensorFlow weights: {base_model_path}")
+                                
+                                # Load base model with TensorFlow weights
+                                base_model = AutoModelForCausalLM.from_pretrained(
+                                    base_model_path,
+                                    dtype=torch.bfloat16,
+                                    device_map="auto",
+                                    trust_remote_code=True,
+                                    attn_implementation=attn_implementation,
+                                    from_tf=True,  # Load from TensorFlow weights
+                                    use_safetensors=False,
+                                )
+                                
+                                # Then load PEFT adapter
+                                if checkpoint_subfolder:
+                                    model = PeftModel.from_pretrained(
+                                        base_model,
+                                        actual_model_path,
+                                        subfolder=checkpoint_subfolder,
+                                    )
+                                else:
+                                    model = PeftModel.from_pretrained(
+                                        base_model,
+                                        actual_model_path,
+                                    )
+                                print("✓ Successfully loaded model using TensorFlow weights + PEFT adapter")
+                            except Exception as e3:
+                                print(f"ERROR: Failed to load model with TensorFlow weights: {e3}")
+                                raise e  # Re-raise original error
+                        else:
+                            print(f"ERROR: Failed to load model even without safetensors: {e2}")
+                            raise e  # Re-raise original error
+                    except Exception as e2:
+                        print(f"ERROR: Failed to load model even without safetensors: {e2}")
+                        raise e  # Re-raise original error
+                # If loading fails with TensorFlow error, try loading base model explicitly
+                elif "TensorFlow" in str(e) or "from_tf" in str(e):
+                    print(f"Warning: Encountered TensorFlow weights issue: {e}")
+                    print("Attempting to load base model explicitly, then applying PEFT adapter...")
+                    try:
+                        # Try to read adapter config to get base model path
+                        from peft import PeftConfig
+                        if checkpoint_subfolder:
+                            config = PeftConfig.from_pretrained(actual_model_path, subfolder=checkpoint_subfolder)
+                        else:
+                            config = PeftConfig.from_pretrained(actual_model_path)
+                        
+                        base_model_path = config.base_model_name_or_path
+                        print(f"Loading base model from: {base_model_path}")
+                        
+                        # Load base model explicitly with PyTorch weights only
+                        # Try safetensors first, fall back to PyTorch if not available
+                        try:
+                            base_model = AutoModelForCausalLM.from_pretrained(
+                                base_model_path,
+                                dtype=torch.bfloat16,
+                                device_map="auto",
+                                trust_remote_code=True,
+                                attn_implementation=attn_implementation,
+                                from_tf=False,
+                                use_safetensors=True,
+                            )
+                        except OSError as safetensors_error:
+                            if "safetensors" in str(safetensors_error).lower():
+                                print(f"Warning: Base model doesn't have safetensors, trying PyTorch format")
+                                try:
+                                    base_model = AutoModelForCausalLM.from_pretrained(
+                                        base_model_path,
+                                        dtype=torch.bfloat16,
+                                        device_map="auto",
+                                        trust_remote_code=True,
+                                        attn_implementation=attn_implementation,
+                                        from_tf=False,
+                                        use_safetensors=False,
+                                    )
+                                except OSError as pytorch_error:
+                                    # If PyTorch format also fails and suggests TensorFlow, try TensorFlow
+                                    if "tensorflow" in str(pytorch_error).lower() or "from_tf" in str(pytorch_error).lower():
+                                        print(f"Warning: PyTorch format not available, using TensorFlow weights")
+                                        base_model = AutoModelForCausalLM.from_pretrained(
+                                            base_model_path,
+                                            dtype=torch.bfloat16,
+                                            device_map="auto",
+                                            trust_remote_code=True,
+                                            attn_implementation=attn_implementation,
+                                            from_tf=True,  # Load from TensorFlow weights
+                                            use_safetensors=False,
+                                        )
+                                    else:
+                                        raise
+                            else:
+                                raise
+                        
+                        # Then load PEFT adapter
+                        if checkpoint_subfolder:
+                            model = PeftModel.from_pretrained(
+                                base_model,
+                                actual_model_path,
+                                subfolder=checkpoint_subfolder,
+                            )
+                        else:
+                            model = PeftModel.from_pretrained(
+                                base_model,
+                                actual_model_path,
+                            )
+                        print("✓ Successfully loaded model using explicit base model + PEFT adapter approach")
+                    except Exception as e2:
+                        print(f"ERROR: Failed to load model with explicit base model approach: {e2}")
+                        raise e  # Re-raise original error
+                else:
                     raise
         else:
-            # Load base model (Finetuner-style: simple and let transformers handle format detection)
-            model = AutoModelForCausalLM.from_pretrained(
-                model_path,
-                device_map="auto",
-                dtype=torch.bfloat16,
-                trust_remote_code=True,
-                attn_implementation=attn_implementation,
-            )
-            print(f"✓ Loaded base model from {model_path}")
+            # Try safetensors first, fall back to PyTorch if not available
+            try:
+                model = AutoModelForCausalLM.from_pretrained(
+                    model_path,
+                    dtype=torch.bfloat16,
+                    device_map="auto",
+                    trust_remote_code=True,
+                    attn_implementation=attn_implementation,
+                    from_tf=False,  # Explicitly prevent TensorFlow loading
+                    use_safetensors=True,  # Prefer SafeTensors format
+                )
+            except OSError as e:
+                if "safetensors" in str(e).lower():
+                    print(f"Warning: SafeTensors not available: {e}")
+                    print("Retrying with PyTorch format (use_safetensors=False)...")
+                    model = AutoModelForCausalLM.from_pretrained(
+                        model_path,
+                        dtype=torch.bfloat16,
+                        device_map="auto",
+                        trust_remote_code=True,
+                        attn_implementation=attn_implementation,
+                        from_tf=False,
+                        use_safetensors=False,
+                    )
+                    print("✓ Successfully loaded model using PyTorch format")
+                else:
+                    raise
     except Exception as e:
         print(f"ERROR: Failed to load model: {e}")
         print(f"Model path: {model_path}")
@@ -302,19 +417,32 @@ def generate_samples_for_model(
     for task_id, problem in problems.items():
         prompt = problem["prompt"]
         
+        # Enhanced prompt format with Rust-specific instructions
+        enhanced_prompt = f"""{prompt}
+
+Implement only the requested function in Rust.
+
+Do not write fn main, tests, example code, or comments not already present.
+
+Do not use ..., todo!(), or unimplemented!().
+
+Use correct Rust imports; Vec is in the prelude, not std::collections.
+
+Mark arguments as mut when you want to sort or mutate them."""
+        
         # Format prompt with chat template if available
         if hasattr(tokenizer, "apply_chat_template"):
             try:
-                messages = [{"role": "user", "content": f"Complete this Rust function:\n\n{prompt}"}]
+                messages = [{"role": "user", "content": enhanced_prompt}]
                 formatted_prompt = tokenizer.apply_chat_template(
                     messages, 
                     tokenize=False, 
                     add_generation_prompt=True
                 )
             except:
-                formatted_prompt = prompt
+                formatted_prompt = enhanced_prompt
         else:
-            formatted_prompt = prompt
+            formatted_prompt = enhanced_prompt
         
         # Add num_samples_per_task copies of this prompt
         for _ in range(num_samples_per_task):
@@ -504,12 +632,12 @@ def _filter_bad_samples(sample_file: str) -> str:
                 problem_samples[task_id]["filtered_reasons"]["short"] = problem_samples[task_id]["filtered_reasons"].get("short", 0) + 1
                 continue
             
-            # Filter out completions with severe brace mismatches (>10 difference)
+            # Filter out completions with severe brace mismatches (>3 difference)
             # This catches obviously incomplete/truncated code
-            # Relaxed from >3 to >10 to be much more lenient (especially for smoke tests)
+            # Relaxed from >2 to >3 to be less strict
             open_braces = completion.count('{')
             close_braces = completion.count('}')
-            if abs(open_braces - close_braces) > 10:
+            if abs(open_braces - close_braces) > 3:
                 filtered_count += 1
                 problem_samples[task_id]["filtered_reasons"] = problem_samples[task_id].get("filtered_reasons", {})
                 problem_samples[task_id]["filtered_reasons"]["braces"] = problem_samples[task_id]["filtered_reasons"].get("braces", 0) + 1
@@ -986,6 +1114,125 @@ def main():
     if run_no_policy and run_policy:
         print(f"  - {output_dir / 'combined_summary.md'} (combined summary)")
 
+if __name__ == "__main__":
+    main()
+
+        print("Nothing to do: both modes disabled.")
+        sys.exit(0)
+    
+    all_results: dict[str, dict | None] = {"no-policy": None, "policy": None}
+
+    # Run no-policy evaluation first (if requested)
+    if run_no_policy:
+        print("\n" + "=" * 80)
+        print("PHASE 1: Running evaluation WITHOUT policy enforcement")
+        print("=" * 80)
+        no_policy_results = run_evaluation_mode(
+            args.base_model,
+            args.checkpoint_path,
+            output_dir,
+            args.num_samples,
+            k_values,
+            sandbox_mode,
+            enforce_policy=False,
+            skip_base=args.skip_base,
+            skip_finetuned=args.skip_finetuned,
+            n_workers=args.n_workers,
+            timeout=args.timeout,
+            batch_size=args.batch_size,
+            max_new_tokens=args.max_new_tokens,
+            device=device,
+            seed=args.seed,
+        )
+        all_results["no-policy"] = no_policy_results
+        print(
+            f"\n✓ Non-policy evaluation complete! Results in: {output_dir / 'no-policy'}"
+        )
+    
+    # Run policy evaluation second (if requested)
+    if run_policy:
+        print("\n" + "=" * 80)
+        print("PHASE 2: Running evaluation WITH policy enforcement")
+        print("=" * 80)
+        policy_results = run_evaluation_mode(
+            args.base_model,
+            args.checkpoint_path,
+            output_dir,
+            args.num_samples,
+            k_values,
+            sandbox_mode,
+            enforce_policy=True,
+            skip_base=args.skip_base,
+            skip_finetuned=args.skip_finetuned,
+            n_workers=args.n_workers,
+            timeout=args.timeout,
+            batch_size=args.batch_size,
+            max_new_tokens=args.max_new_tokens,
+            device=device,
+            seed=args.seed,
+        )
+        all_results["policy"] = policy_results
+        print(
+            f"\n✓ Policy evaluation complete! Results in: {output_dir / 'policy'}"
+        )
+    
+    # Combined summary markdown (unchanged from your existing logic)
+    if all_results["no-policy"] or all_results["policy"]:
+        summary_file = output_dir / "combined_summary.md"
+        with summary_file.open("w", encoding="utf-8") as f:
+            f.write("# HumanEval Rust Evaluation Summary\n\n")
+            f.write(f"- Base model: `{args.base_model}`\n")
+            f.write(f"- Fine-tuned checkpoint: `{args.checkpoint_path}`\n")
+            f.write(f"- Num samples per task: {args.num_samples}\n")
+            f.write(f"- k-values: {k_values}\n")
+            f.write(f"- Device: {device}\n")
+            f.write(f"- Seed: {args.seed}\n\n")
+
+            if all_results["no-policy"]:
+                f.write("## No-Policy Mode\n\n")
+            if all_results["no-policy"]["base"]:
+                f.write("### Base Model\n")
+                for metric, value in sorted(
+                    all_results["no-policy"]["base"].items()
+                ):
+                    f.write(f"- **{metric}**: {value:.4f} ({value*100:.2f}%)\n")
+            if all_results["no-policy"]["finetuned"]:
+                f.write("\n### Fine-tuned Model\n")
+                for metric, value in sorted(
+                    all_results["no-policy"]["finetuned"].items()
+                ):
+                    f.write(f"- **{metric}**: {value:.4f} ({value*100:.2f}%)\n")
+            
+            if all_results["policy"]:
+                f.write("\n## Policy Enforcement Mode\n\n")
+            if all_results["policy"]["base"]:
+                f.write("### Base Model\n")
+                for metric, value in sorted(
+                    all_results["policy"]["base"].items()
+                ):
+                    f.write(f"- **{metric}**: {value:.4f} ({value*100:.2f}%)\n")
+            if all_results["policy"]["finetuned"]:
+                f.write("\n### Fine-tuned Model\n")
+                for metric, value in sorted(
+                    all_results["policy"]["finetuned"].items()
+                ):
+                    f.write(f"- **{metric}**: {value:.4f} ({value*100:.2f}%)\n")
+        
+        print(f"\n✓ Combined summary saved to: {summary_file}")
+    
+    # Top-level metadata for Lambda
+    write_eval_metadata(output_dir, all_results, args, device)
+
+    print("\n" + "=" * 80)
+    print("All Evaluations Complete!")
+    print("=" * 80)
+    print(f"\nResults organized in sub-folders:")
+    if run_no_policy:
+        print(f"  - {output_dir / 'no-policy'}/ (no policy enforcement)")
+    if run_policy:
+        print(f"  - {output_dir / 'policy'}/ (policy enforcement enabled)")
+    if run_no_policy and run_policy:
+        print(f"  - {output_dir / 'combined_summary.md'} (combined summary)")
 
 if __name__ == "__main__":
     main()
