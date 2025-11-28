@@ -28,6 +28,9 @@ export NUM_SAMPLES="${NUM_SAMPLES:-100}"
 export K_VALUES="${K_VALUES:-1,10,100}"
 export SANDBOX_MODE="${SANDBOX_MODE:-}"    # Empty = auto-detect, or "docker", "firejail", "none"
 
+# Docker sandbox configuration
+export DOCKER_IMAGE="${DOCKER_IMAGE:-human-eval-rust-sandbox}"  # Matches human-eval-rust default
+
 # Reproducibility toggles
 export SKIP_ENV_CHECK="${SKIP_ENV_CHECK:-0}"  # Set to 1 to bypass strict Ubuntu 22.04 + H100 check
 export NONINTERACTIVE="${NONINTERACTIVE:-0}"  # Set to 1 for CI/non-interactive runs (no prompts)

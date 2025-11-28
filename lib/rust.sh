@@ -8,7 +8,7 @@
 # Sources ~/.cargo/env to make rustc available in PATH.
 #
 # Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
-# Version: 1.3.8
+# Version: 1.3.9
 
 # Source dependencies
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -60,5 +60,15 @@ install_rust() {
             error_exit "Rust installed but rustc not found in PATH. Evaluation cannot proceed."
         fi
     fi
+}
+
+# Verify Rust toolchain is available on host
+verify_rust_host() {
+    if ! command_exists rustc; then
+        error_exit "Rust toolchain not available on host. Run install_rust first."
+    fi
+
+    RUST_VERSION=$(rustc --version 2>/dev/null || echo "unknown")
+    log_success "Verified Rust on host: $RUST_VERSION"
 }
 

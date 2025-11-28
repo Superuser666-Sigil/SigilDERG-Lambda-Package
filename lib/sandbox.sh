@@ -9,13 +9,79 @@
 # Includes retry logic and detailed diagnostics for Docker startup issues.
 #
 # Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
-# Version: 1.3.8
+# Version: 1.3.9
 
 # Source dependencies
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$SCRIPT_DIR/eval_setup_config.sh"
 source "$SCRIPT_DIR/lib/logging.sh"
 source "$SCRIPT_DIR/lib/environment.sh"
+
+# Install Docker and configure user group
+install_docker() {
+    log_info "Installing Docker..."
+    
+    if command_exists docker; then
+        log_success "Docker is already installed"
+        return 0
+    fi
+    
+    if ! command_exists curl; then
+        error_exit "curl is required to install Docker. Please install curl first."
+    fi
+    
+    # Install Docker using official script
+    log_info "Downloading Docker installation script..."
+    if ! curl -fsSL https://get.docker.com -o /tmp/get-docker.sh; then
+        error_exit "Failed to download Docker installation script"
+    fi
+    
+    log_info "Running Docker installation script..."
+    if ! sudo sh /tmp/get-docker.sh; then
+        rm -f /tmp/get-docker.sh
+        error_exit "Docker installation failed"
+    fi
+    
+    rm -f /tmp/get-docker.sh
+    log_success "Docker installed successfully"
+    
+    # Immediately add user to docker group
+    log_info "Adding user $USER to docker group..."
+    if ! sudo usermod -aG docker "$USER"; then
+        rm -f /tmp/get-docker.sh 2>/dev/null || true
+        error_exit "CRITICAL: Failed to add user to docker group.\n\nPlease run these commands manually:\n  sudo usermod -aG docker $USER\n  newgrp docker\n\nThen verify with: docker ps"
+    fi
+    log_success "User added to docker group"
+    
+    # Attempt to activate docker group using newgrp
+    # Note: newgrp starts a new shell, so we test access instead of actually activating
+    log_info "Testing Docker group access (group activation may require new shell session)..."
+    DOCKER_ACCESS_WORKING=false
+    
+    # Try sg first (preferred, doesn't replace shell)
+    if command_exists sg; then
+        if timeout 5 sg docker -c "docker ps >/dev/null 2>&1" 2>/dev/null; then
+            DOCKER_ACCESS_WORKING=true
+            log_success "Docker group access verified with sg docker"
+        fi
+    fi
+    
+    # Try newgrp -c as fallback (runs command in new group context without replacing shell)
+    if [ "$DOCKER_ACCESS_WORKING" = false ] && command_exists newgrp; then
+        if timeout 5 newgrp docker -c "docker ps >/dev/null 2>&1" 2>/dev/null; then
+            DOCKER_ACCESS_WORKING=true
+            log_success "Docker group access verified with newgrp docker"
+        fi
+    fi
+    
+    # If group access test failed, hard stop with instructions
+    if [ "$DOCKER_ACCESS_WORKING" = false ]; then
+        error_exit "CRITICAL: Docker group added but access verification failed.\n\nGroup changes require a new shell session to take effect.\n\nPlease run this command manually:\n  newgrp docker\n\nOr log out and back in, then verify with: docker ps\n\nAfter activating the group, re-run this setup script."
+    fi
+    
+    log_success "Docker installation and group configuration completed successfully"
+    log_info "Note: If you need to activate the docker group in your current shell session, run: newgrp docker"
+}
 
 # Verify Docker permissions and functionality
 verify_docker_access() {
@@ -226,17 +292,49 @@ check_docker_with_verification() {
     log_info "Checking Docker availability and permissions..."
     
     if ! command_exists docker; then
-        log_warning "Docker not found. Install Docker for secure sandboxing: https://docs.docker.com/get-docker/"
-        log_info "For Ubuntu 22.04, you can install with:"
-        log_info "  curl -fsSL https://get.docker.com -o get-docker.sh"
-        log_info "  sudo sh get-docker.sh"
-        handle_sandbox_fallback
-        FALLBACK_RESULT=$?
-        if [ $FALLBACK_RESULT -eq 2 ]; then
-            # User requested stop (option 3)
-            return 2
+        log_warning "Docker not found. Attempting to install Docker..."
+        
+        if [ "${NONINTERACTIVE:-0}" = "1" ]; then
+            # In non-interactive mode, try to install Docker automatically
+            if install_docker; then
+                log_success "Docker installed and configured successfully"
+                export SANDBOX_MODE="docker"
+                return 0
+            else
+                error_exit "Docker installation failed in non-interactive mode. Please install Docker manually."
+            fi
+        else
+            # In interactive mode, ask user if they want to install
+            log_info "Docker is required for secure sandboxing."
+            read -p "Install Docker now? (Y/n): " -n 1 -r
+            echo ""
+            if [[ $REPLY =~ ^[Nn]$ ]]; then
+                log_info "Docker installation skipped. Proceeding to sandbox fallback options..."
+                handle_sandbox_fallback
+                FALLBACK_RESULT=$?
+                if [ $FALLBACK_RESULT -eq 2 ]; then
+                    # User requested stop (option 3)
+                    return 2
+                fi
+                return $FALLBACK_RESULT
+            else
+                # User wants to install Docker
+                if install_docker; then
+                    log_success "Docker installed and configured successfully"
+                    export SANDBOX_MODE="docker"
+                    return 0
+                else
+                    log_error "Docker installation failed. Proceeding to sandbox fallback options..."
+                    handle_sandbox_fallback
+                    FALLBACK_RESULT=$?
+                    if [ $FALLBACK_RESULT -eq 2 ]; then
+                        # User requested stop (option 3)
+                        return 2
+                    fi
+                    return $FALLBACK_RESULT
+                fi
+            fi
         fi
-        return $FALLBACK_RESULT
     fi
     
     # Check if Docker daemon is running (check service status first, then permissions)
@@ -411,5 +509,46 @@ check_docker_with_verification() {
 check_docker() {
     # This function is now a wrapper that calls the enhanced version
     check_docker_with_verification
+}
+
+# Verify Rust toolchain is available inside the sandbox
+verify_rust_in_sandbox() {
+    log_info "Verifying Rust toolchain inside sandbox (mode=${SANDBOX_MODE:-docker})..."
+
+    case "${SANDBOX_MODE:-docker}" in
+        docker)
+            DOCKER_IMAGE="${DOCKER_IMAGE:-human-eval-rust-sandbox}"
+            if [ -z "${DOCKER_IMAGE:-}" ]; then
+                error_exit "DOCKER_IMAGE not set; cannot verify Rust in Docker sandbox"
+            fi
+
+            if docker run --rm "${DOCKER_IMAGE}" rustc --version >/dev/null 2>&1; then
+                RUST_VER=$(docker run --rm "${DOCKER_IMAGE}" rustc --version 2>/dev/null || echo "unknown")
+                log_success "Rust available inside Docker sandbox image: ${DOCKER_IMAGE} (${RUST_VER})"
+            else
+                error_exit "Rust toolchain not available inside Docker image: ${DOCKER_IMAGE}. Build the image first or ensure it includes Rust."
+            fi
+            ;;
+        firejail)
+            if firejail --quiet rustc --version >/dev/null 2>&1; then
+                RUST_VER=$(firejail --quiet rustc --version 2>/dev/null || echo "unknown")
+                log_success "Rust available inside Firejail sandbox (${RUST_VER})"
+            else
+                error_exit "Rust toolchain not available inside Firejail sandbox"
+            fi
+            ;;
+        none)
+            # Fallback to host verification
+            if command_exists rustc; then
+                RUST_VER=$(rustc --version 2>/dev/null || echo "unknown")
+                log_warning "Sandbox mode 'none': using host Rust toolchain directly (${RUST_VER})"
+            else
+                error_exit "Sandbox mode 'none' but Rust not available on host"
+            fi
+            ;;
+        *)
+            error_exit "Unknown SANDBOX_MODE: ${SANDBOX_MODE}"
+            ;;
+    esac
 }
 

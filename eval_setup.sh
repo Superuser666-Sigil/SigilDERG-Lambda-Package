@@ -84,6 +84,10 @@ main() {
         install_rust || ERRORS+=("Rust installation (REQUIRED)")
     } 2>&1 | tee -a setup.log
     
+    {
+        verify_rust_host || ERRORS+=("Rust host verification")
+    } 2>&1 | tee -a setup.log
+    
     DOCKER_CHECK_EXIT=0
     {
         check_docker_with_verification
@@ -105,6 +109,10 @@ main() {
             WARNINGS+=("Docker check - using ${SANDBOX_MODE} as fallback")
         fi
     fi
+    
+    {
+        verify_rust_in_sandbox || ERRORS+=("Rust sandbox verification")
+    } 2>&1 | tee -a setup.log
     
     {
         check_tmux || WARNINGS+=("tmux check")

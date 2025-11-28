@@ -8,7 +8,7 @@
 # and NVIDIA H100 GPU requirements, with optional override via SKIP_ENV_CHECK.
 #
 # Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
-# Version: 1.3.8
+# Version: 1.3.9
 
 # Source dependencies
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -22,6 +22,11 @@ command_exists() {
 
 # Environment sanity checks for reproducibility (Ubuntu 22.04 + H100)
 check_environment() {
+    if [[ "${SKIP_ENV_CHECK:-0}" == "1" ]]; then
+        log_warning "SKIP_ENV_CHECK=1: Skipping OS/GPU environment validation"
+        return 0
+    fi
+    
     # OS check
     if [ -f /etc/os-release ]; then
         . /etc/os-release
