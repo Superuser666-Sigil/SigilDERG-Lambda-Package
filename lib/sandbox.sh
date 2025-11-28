@@ -413,43 +413,68 @@ check_docker_with_verification() {
     case $verify_result in
         0)
             log_success "Docker is available, running, and accessible"
+            export SANDBOX_MODE="docker"
             return 0
             ;;
         2)
             # Permission denied - this is critical
             log_error "Docker permission denied detected"
             
-            # Try to fix automatically if possible
-            if groups | grep -q docker; then
+            # Check if user is in docker group (even if not active in current session)
+            USER_IN_DOCKER_GROUP=false
+            if groups | grep -q docker 2>/dev/null; then
+                USER_IN_DOCKER_GROUP=true
+            elif id -nG 2>/dev/null | grep -q docker; then
+                USER_IN_DOCKER_GROUP=true
+            fi
+            
+            if [ "$USER_IN_DOCKER_GROUP" = true ]; then
                 log_warning "User is in docker group but permissions not active in this session"
                 log_info "Testing Docker access with sg docker (safer than newgrp)..."
                 
                 # Test if Docker works with sg (safer than newgrp, doesn't create interactive shell)
                 # Use timeout to prevent hanging (5 second timeout)
                 # sg is preferred over newgrp because it doesn't create a new interactive shell
+                DOCKER_TEST_SUCCESS=false
                 if command -v sg >/dev/null 2>&1; then
+                    log_info "Testing: sg docker -c 'docker ps'"
                     if timeout 5 sg docker -c "docker ps >/dev/null 2>&1" 2>/dev/null; then
                         log_success "Docker access verified with sg docker - docker ps succeeded"
                         log_info "Docker is accessible with docker group. Setting sandbox mode to docker."
                         log_info "Note: Current shell session may still need 'newgrp docker' for immediate access,"
                         log_info "but the evaluation will run with docker group active and will have access."
                         export SANDBOX_MODE="docker"
-                        return 0
+                        DOCKER_TEST_SUCCESS=true
+                    else
+                        log_warning "sg docker test failed, trying alternative methods..."
                     fi
                 fi
                 
-                # Fallback to newgrp if sg is not available
-                log_info "sg not available, trying newgrp docker..."
-                if timeout 5 newgrp docker -c "docker ps >/dev/null 2>&1" 2>/dev/null; then
-                    log_success "Docker access verified with newgrp docker - docker ps succeeded"
-                    log_info "Docker is accessible with docker group. Setting sandbox mode to docker."
-                    log_info "Note: Current shell session may still need 'newgrp docker' for immediate access,"
-                    log_info "but the evaluation will run with docker group active and will have access."
-                    export SANDBOX_MODE="docker"
-                    return 0
-                else
-                    log_warning "Docker still not accessible even with newgrp docker"
-                    log_info "You may need to log out and log back in for group changes to take effect"
+                # Fallback to newgrp if sg is not available or failed
+                if [ "$DOCKER_TEST_SUCCESS" = false ] && command -v newgrp >/dev/null 2>&1; then
+                    log_info "Testing: newgrp docker -c 'docker ps'"
+                    if timeout 5 newgrp docker -c "docker ps >/dev/null 2>&1" 2>/dev/null; then
+                        log_success "Docker access verified with newgrp docker - docker ps succeeded"
+                        log_info "Docker is accessible with docker group. Setting sandbox mode to docker."
+                        log_info "Note: Current shell session may still need 'newgrp docker' for immediate access,"
+                        log_info "but the evaluation will run with docker group active and will have access."
+                        export SANDBOX_MODE="docker"
+                        DOCKER_TEST_SUCCESS=true
+                    fi
+                fi
+                
+                # If both tests failed, but user is in group, provide clear instructions
+                if [ "$DOCKER_TEST_SUCCESS" = false ]; then
+                    log_warning "Docker group membership detected but access test failed"
+                    log_info "This usually means the group isn't active in the current shell session."
+                    log_info ""
+                    log_info "To fix this, run one of the following:"
+                    log_info "  1. Run: newgrp docker"
+                    log_info "  2. Or log out and log back in"
+                    log_info "  3. Then verify with: docker ps"
+                    log_info ""
+                    log_info "After activating the docker group, re-run this setup script."
+                    log_info "The script will then detect Docker access and continue."
                 fi
             else
                 log_info "User is not in docker group. Attempting to add user to docker group..."
