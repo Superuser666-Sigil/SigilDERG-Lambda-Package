@@ -185,6 +185,11 @@ echo "To detach: Press Ctrl+B, then D"
 echo "=========================================="
 echo ""
 
+# Warn loudly if running unsandboxed
+if [ "${SANDBOX_MODE:-}" = "none" ]; then
+    echo "WARNING: Running UNSANDBOXED. This will execute arbitrary code with user privileges."
+fi
+
 # Record start time for duration and cost calculation
 EVAL_START_TIME=\$(date +%s)
 echo "Evaluation started at: \$(date)"
