@@ -51,7 +51,7 @@ missing dependencies**. It:
 - Installs **PyTorch 2.4.0** (CUDA 12.4) or **PyTorch 2.7.1** (CUDA 12.8+) with
   Flash Attention v2
 - Installs **Rust toolchain** via rustup (required for evaluation)
-- Verifies Docker/Firejail sandboxing availability
+- Installs/verifies Firejail sandboxing (prompts before running unsandboxed)
 
 ### Installs SigilDERG Ecosystem
 
@@ -110,8 +110,8 @@ validated together for reproducible evaluation results.
   imports
 - **Hard-fail:** Exits immediately on critical errors (missing Rust, failed
   package installs)
-- **Sandbox-aware:** Automatically detects and uses Docker or Firejail for code
-  execution isolation
+- **Sandbox-aware:** Prefers Firejail for isolation; running unsandboxed requires
+  explicit opt-in
 - **Persistent:** Runs evaluation in tmux session (survives disconnections)
 
 ## Output Summary
@@ -132,7 +132,7 @@ CHECKPOINT_PATH="Superuser666-Sigil/..."             # Fine-tuned checkpoint
 NUM_SAMPLES=100                                       # Samples per task
 K_VALUES="1,10,100"                                   # Pass@k metrics
 OUTPUT_DIR="./humaneval_results"                     # Output directory
-SANDBOX_MODE="firejail"                              # firejail (default) or none
+SANDBOX_MODE="firejail"                              # Firejail by default; set to none to disable sandboxing
 SKIP_ENV_CHECK=1                                      # Bypass OS/GPU checks
 NONINTERACTIVE=1                                      # Auto-start evaluation
 ```

@@ -14,6 +14,7 @@ import sys
 import platform
 import subprocess
 import random
+import shutil
 from pathlib import Path
 from datetime import datetime
 
@@ -47,6 +48,45 @@ def _run_cmd(cmd: str) -> str | None:
         ).strip()
     except Exception:
         return None
+
+
+def _resolve_sandbox_mode(requested: str | None) -> tuple[str | None, list[str]]:
+    """Resolve sandbox mode with Firejail preference and clear warnings."""
+
+    messages: list[str] = []
+    normalized = requested.lower() if requested else None
+
+    if normalized == "auto":
+        normalized = None
+
+    if normalized not in (None, "firejail", "none"):
+        raise ValueError(
+            f"Invalid sandbox mode '{requested}'. Choose 'firejail', 'none', or 'auto'."
+        )
+
+    if normalized == "firejail":
+        if not shutil.which("firejail"):
+            raise RuntimeError(
+                "Firejail requested but not available. Install Firejail or use --sandbox-mode none."
+            )
+        messages.append("Using sandbox mode: firejail")
+        return "firejail", messages
+
+    if normalized == "none":
+        messages.append(
+            "WARNING: Running without a sandbox executes arbitrary code on the host."
+        )
+        return "none", messages
+
+    # Auto-detect: prefer Firejail, otherwise warn before running unsandboxed
+    if shutil.which("firejail"):
+        messages.append("Auto-detected Firejail; enabling sandboxed evaluation.")
+        return "firejail", messages
+
+    messages.append(
+        "WARNING: Firejail not found; proceeding without sandbox protection (mode: none)."
+    )
+    return "none", messages
 
 
 def write_eval_metadata(output_dir: Path, all_results: dict, args, device: str) -> Path:
@@ -696,7 +736,11 @@ def evaluate_samples(
     print(f"\n{'='*60}")
     print(f"Evaluating: {sample_file}")
     print(f"{'='*60}")
-    print(f"Sandbox mode: {sandbox_mode or 'auto-detect'}")
+    print(f"Sandbox mode: {sandbox_mode}")
+    if sandbox_mode == "none":
+        print(
+            "WARNING: Evaluation is running unsandboxed; proceed only if you trust the code."
+        )
     print(f"Policy enforcement: {enforce_policy}")
     print(f"Workers: {n_workers}, Timeout: {timeout}s")
     
@@ -712,7 +756,7 @@ def evaluate_samples(
             timeout=timeout,
             problem_file=None,
             language="rust",
-            sandbox_mode=sandbox_mode,  # None = auto-detect
+            sandbox_mode=sandbox_mode,
             enforce_policy=enforce_policy,
         )
         
@@ -835,7 +879,7 @@ def run_evaluation_mode(
         "checkpoint": checkpoint_path,
         "num_samples": num_samples,
         "k_values": k_values,
-        "sandbox_mode": sandbox_mode or "auto-detect",
+        "sandbox_mode": sandbox_mode,
         "enforce_policy": enforce_policy,
         "device": device,
         "n_workers": n_workers,
@@ -924,8 +968,9 @@ def main():
     parser.add_argument("--skip-finetuned", action="store_true")
     parser.add_argument(
         "--sandbox-mode",
-        default=None,
-        help="Sandbox mode: 'docker', 'firejail', 'none', or None for auto-detect",
+        choices=["firejail", "none", "auto"],
+        default="auto",
+        help="Sandbox mode: 'firejail', 'none', or 'auto' (auto-detect prefers Firejail)",
     )
     parser.add_argument(
         "--policy-only",
@@ -989,8 +1034,14 @@ def main():
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    # Determine sandbox mode
-    sandbox_mode = args.sandbox_mode if args.sandbox_mode else None
+    # Determine sandbox mode with Firejail-first preference
+    try:
+        sandbox_mode, sandbox_messages = _resolve_sandbox_mode(args.sandbox_mode)
+        for message in sandbox_messages:
+            print(message)
+    except (ValueError, RuntimeError) as exc:
+        print(f"Error resolving sandbox mode: {exc}")
+        sys.exit(1)
     
     # Determine which modes to run
     run_no_policy = not args.policy_only

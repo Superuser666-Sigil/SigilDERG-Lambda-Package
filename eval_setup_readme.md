@@ -17,7 +17,7 @@ The evaluation harness is organized as a modular system for maintainability and 
   - `pytorch.sh` - PyTorch and Flash Attention installation
   - `sigilderg.sh` - SigilDERG ecosystem component installation
   - `rust.sh` - Rust toolchain installation
-  - `sandbox.sh` - Docker/Firejail sandbox verification and fallback
+  - `sandbox.sh` - Firejail sandbox verification and fallback
   - `cli_tools.sh` - GitHub and HuggingFace CLI installation
   - `evaluation.sh` - Evaluation script generation
   - `tmux.sh` - tmux session management
@@ -43,7 +43,9 @@ At a high level, the script:
      - Python compilation (`build-essential`, SSL/zlib/etc.)
      - Rust and Cargo
      - `tmux` (for persistent eval sessions)
-   - Checks for Docker availability (for sandboxing) and attempts to start it if installed but not running; does not install Docker automatically.
+   - Installs and verifies **Firejail** for sandboxing when available.
+   - If Firejail is missing in interactive mode, prompts to install it and, on failure, offers retry, UNSANDBOXED opt-in, or abort.
+   - In non-interactive mode, attempts installation once and aborts on failure rather than silently running unsandboxed.
    - Leaves system upgrades to the user; it only installs what it needs.
 
 3. **Bootstraps Python via pyenv and sets up a virtualenv**
@@ -65,7 +67,7 @@ At a high level, the script:
 
 5. **Installs the SigilDERG ecosystem and HumanEval-Rust**
 
-   - Installs **`human-eval-rust`** from PyPI with a minimum version of **1.4.4** (required for enhanced prompt format, result schema, compile rate tracking, main-free rate tracking, rustc preflight checks, never-dropping completions, Docker/Finetuner parity, Rust 1.91.1 Docker image, and bug fixes), and verifies the version.
+   - Installs **`human-eval-rust`** from PyPI with a minimum version of **1.4.4** (required for enhanced prompt format, result schema, compile rate tracking, main-free rate tracking, rustc preflight checks, never-dropping completions, sandbox parity fixes, and bug fixes), and verifies the version.
      - If PyPI fails or the version is wrong, it falls back to installing directly from the GitHub repo.
    - Installs **`sigil-pipeline`** (minimum version 1.2.1 for termcolor compatibility) and **`sigilderg-finetuner`** from PyPI first, with GitHub fallbacks if needed.
    - Verifies that key modules can be imported inside the venv.
@@ -94,7 +96,7 @@ At a high level, the script:
    - Seeds all relevant RNGs (`python`, `numpy`, `torch`) for reproducibility (default seed: 1234).
    - Uses `human-eval-rust` to:
      - Generate completions for each HumanEval-Rust problem.
-     - Execute them in a sandbox (Docker or firejail if available).
+     - Execute them in a Firejail sandbox when available; requires explicit opt-in to run unsandboxed.
      - Compute pass@k metrics.
    - Runs **both modes automatically by default**:
      - **No-policy** (raw model behavior) - runs first
@@ -152,8 +154,8 @@ This script is deliberately **opinionated** and **narrowly targeted**. The desig
 4. **Explicit sandboxing for generated code**
 
    - The benchmark runs arbitrary model-generated Rust code.
-   - The script favors Docker (or firejail) when available to provide isolation.
-   - If sandboxing isn’t available, it logs that clearly so reviewers know how code was executed.
+   - The script defaults to Firejail for isolation and requires an explicit opt-in to run without sandboxing.
+   - If Firejail installation fails in interactive mode, it prompts to retry, run UNSANDBOXED (must type `YES`), or abort; non-interactive runs abort on install failure.
 
 5. **Modular architecture with clear separation of concerns**
 
@@ -200,7 +202,7 @@ You can customize the evaluation via environment variables before running the sc
 - `NUM_SAMPLES`: Samples per task (default: `100`)
 - `K_VALUES`: Comma-separated k-values for pass@k metrics (default: `1,10,100`)
 - `OUTPUT_DIR`: Output directory (default: `./humaneval_results`)
-- `SANDBOX_MODE`: Sandbox mode - `firejail`, `none`, or empty for auto-detect (default: auto-detect Firejail)
+- `SANDBOX_MODE`: Sandbox mode - `firejail` (default) or `none` (explicit unsandboxed opt-in)
 - `SKIP_ENV_CHECK`: Set to `1` to bypass Ubuntu 22.04 + H100 environment check
 - `NONINTERACTIVE`: Set to `1` for non-interactive mode (no prompts, auto-start evaluation)
 
