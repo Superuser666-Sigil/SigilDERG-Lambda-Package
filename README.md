@@ -57,7 +57,7 @@ missing dependencies**. It:
 
 - **sigil-pipeline** >= 1.2.1 (from PyPI, GitHub fallback)
 - **sigilderg-finetuner** (from PyPI, GitHub fallback)
-- **human-eval-rust** >= 1.4.2 (from PyPI, GitHub fallback)
+- **human-eval-rust** >= 1.4.3 (from PyPI, GitHub fallback)
 - Core ML dependencies (transformers, accelerate, peft, bitsandbytes, etc.)
 
 ### Runs Evaluation
@@ -93,7 +93,7 @@ components:
 | --- | --- | --- |
 | **sigil-pipeline** | >= 1.2.1 | Rust code dataset generation |
 | **sigilderg-finetuner** | latest | QLoRA fine-tuning on Rust code |
-| **human-eval-rust** | >= 1.4.2 | HumanEval-Rust evaluation harness |
+| **human-eval-rust** | >= 1.4.3 | HumanEval-Rust evaluation harness |
 
 **Architecture:** See
 [SigilDERG Ecosystem Architecture](https://github.com/Superuser666-Sigil/SigilDERG-Data_Production/blob/main/ARCHITECTURE.md)
