@@ -28,6 +28,13 @@ install_rust() {
     if command_exists rustc; then
         RUST_VERSION=$(rustc --version)
         log_success "Rust already installed: $RUST_VERSION"
+        
+        # Ensure clippy and rustfmt are available (matching Finetuner approach)
+        if command_exists rustup; then
+            log_info "Ensuring clippy and rustfmt components are installed..."
+            rustup component add clippy rustfmt 2>/dev/null || log_warning "Could not add clippy/rustfmt components (may already be installed)"
+        fi
+        
         return 0
     else
         log_info "Installing Rust toolchain..."
@@ -36,6 +43,13 @@ install_rust() {
         
         # Source cargo environment (use dot notation as requested)
         . "$HOME/.cargo/env" || error_exit "Failed to source cargo environment"
+        
+        # Set default toolchain to stable (matching Finetuner approach)
+        rustup default stable || log_warning "Could not set default toolchain to stable"
+        
+        # Install clippy and rustfmt components (matching Finetuner approach)
+        log_info "Installing clippy and rustfmt components..."
+        rustup component add clippy rustfmt || error_exit "Failed to install clippy and rustfmt components"
         
         # Verify Rust is now available
         if command_exists rustc; then
