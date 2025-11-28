@@ -88,21 +88,31 @@ main() {
         verify_rust_host || ERRORS+=("Rust host verification")
     } 2>&1 | tee -a setup.log
     
-    # Remove the curly braces {} and use PIPESTATUS to catch the error code
-    # through the pipe to 'tee'. This prevents 'set -e' from killing the script.
-    ensure_sandbox 2>&1 | tee -a setup.log
+    # Firejail-first sandbox verification (capture status manually)
+    set +e
+    verify_firejail_sandbox 2>&1 | tee -a setup.log
     SANDBOX_CHECK_EXIT=${PIPESTATUS[0]}
+    set -e
 
-    # Check exit code
-    if [ $SANDBOX_CHECK_EXIT -eq 2 ]; then
-        log_info ""
-        log_info "Setup stopped by user request."
-        exit 1
-    elif [ $SANDBOX_CHECK_EXIT -ne 0 ]; then
-        ERRORS+=("Sandbox verification failed")
-    elif [ "${SANDBOX_MODE:-firejail}" = "none" ]; then
-        WARNINGS+=("Running without sandbox protection")
-    fi
+    case $SANDBOX_CHECK_EXIT in
+        $SANDBOX_STATUS_READY)
+            : # Firejail ready
+            ;;
+        $SANDBOX_STATUS_UNSANDBOXED)
+            WARNINGS+=("Running without sandbox protection (user confirmed UNSANDBOXED mode)")
+            ;;
+        $SANDBOX_STATUS_INSTALL_FAILED)
+            log_error "Firejail installation failed without approval to continue unsandboxed."
+            exit 1
+            ;;
+        $SANDBOX_STATUS_USER_DECLINED)
+            log_error "Sandboxing declined; setup halted per user input."
+            exit 1
+            ;;
+        *)
+            ERRORS+=("Sandbox verification returned unexpected status")
+            ;;
+    esac
     
     {
         verify_rust_in_sandbox || ERRORS+=("Rust sandbox verification")
@@ -188,19 +198,8 @@ main() {
         log_info "  Optional flags:"
         log_info "    --policy-only        : Run only policy enforcement mode"
         log_info "    --no-policy-only     : Run only no-policy mode"
-        log_info "    --sandbox-mode=docker: Force Docker sandboxing"
-        log_info "    --sandbox-mode=none  : No sandboxing (UNSAFE, dev only)"
-        fi
-    fi
-}
-
-# Run main
-main "$@"
-
-        log_info "    --policy-only        : Run only policy enforcement mode"
-        log_info "    --no-policy-only     : Run only no-policy mode"
-        log_info "    --sandbox-mode=docker: Force Docker sandboxing"
-        log_info "    --sandbox-mode=none  : No sandboxing (UNSAFE, dev only)"
+        log_info "    --sandbox-mode=firejail: Force Firejail sandboxing (default)"
+        log_info "    --sandbox-mode=none     : Run UNSANDBOXED (unsafe, requires confirmation)"
         fi
     fi
 }

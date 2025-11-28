@@ -14,6 +14,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 [ -f "$SCRIPT_DIR/lib/logging.sh" ] && source "$SCRIPT_DIR/lib/logging.sh" || { echo "CRITICAL: logging.sh not found"; exit 1; }
 [ -f "$SCRIPT_DIR/lib/environment.sh" ] && source "$SCRIPT_DIR/lib/environment.sh"
 
+# Status codes for Firejail verification
+SANDBOX_STATUS_READY=0
+SANDBOX_STATUS_INSTALL_FAILED=1
+SANDBOX_STATUS_USER_DECLINED=2
+SANDBOX_STATUS_UNSANDBOXED=3
+
 # ----------------------------------------------------------------------
 # Install Firejail
 # ----------------------------------------------------------------------
@@ -56,11 +62,11 @@ confirm_unsandboxed() {
     if [ "$confirm" == "YES" ]; then
         export SANDBOX_MODE="none"
         log_warning "Proceeding without sandbox protection."
-        return 0
+        return $SANDBOX_STATUS_UNSANDBOXED
     fi
 
     log_info "Unsandboxed execution not confirmed."
-    return 1
+    return $SANDBOX_STATUS_USER_DECLINED
 }
 
 # ----------------------------------------------------------------------
@@ -68,9 +74,10 @@ confirm_unsandboxed() {
 # ----------------------------------------------------------------------
 handle_firejail_failure() {
     local reason="$1"
+    local decline_status="${2:-$SANDBOX_STATUS_INSTALL_FAILED}"
 
     while true; do
-        log_error "Firejail installation failed: ${reason}"
+        log_error "Firejail unavailable: ${reason}"
 
         if [ -n "${FIREJAIL_INSTALL_ERROR:-}" ]; then
             log_error "Error detail:"
@@ -87,17 +94,20 @@ handle_firejail_failure() {
             r|R)
                 if install_firejail; then
                     export SANDBOX_MODE="firejail"
-                    return 0
+                    return $SANDBOX_STATUS_READY
                 fi
                 reason="${FIREJAIL_INSTALL_ERROR:-Installation failed again}"
                 ;;
             u|U)
-                if confirm_unsandboxed; then
-                    return 0
+                local confirm_status
+                confirm_unsandboxed
+                confirm_status=$?
+                if [ "$confirm_status" -eq $SANDBOX_STATUS_UNSANDBOXED ]; then
+                    return $SANDBOX_STATUS_UNSANDBOXED
                 fi
                 ;;
             a|A)
-                return 2
+                return "$decline_status"
                 ;;
             *)
                 echo "Invalid option."
@@ -109,23 +119,30 @@ handle_firejail_failure() {
 # ----------------------------------------------------------------------
 # Ensure Firejail sandbox availability
 # ----------------------------------------------------------------------
-ensure_sandbox() {
-    log_info "Checking Firejail sandbox environment..."
+verify_firejail_sandbox() {
+    log_info "Verifying Firejail sandbox (preferred)."
+
+    if [ "${SANDBOX_MODE:-}" = "none" ]; then
+        export SANDBOX_MODE="none"
+        log_warning "SANDBOX_MODE=none provided; running UNSANDBOXED. This is unsafe."
+        return $SANDBOX_STATUS_UNSANDBOXED
+    fi
 
     if command_exists firejail; then
         FIREJAIL_VERSION=$(firejail --version | head -1)
         log_success "Firejail available: $FIREJAIL_VERSION"
         export SANDBOX_MODE="firejail"
-        return 0
+        return $SANDBOX_STATUS_READY
     fi
 
     if [ "${NONINTERACTIVE:-0}" = "1" ]; then
         log_info "Firejail not detected; attempting installation in NONINTERACTIVE mode."
         if install_firejail; then
             export SANDBOX_MODE="firejail"
-            return 0
+            return $SANDBOX_STATUS_READY
         fi
-        error_exit "Firejail installation failed in NONINTERACTIVE mode: ${FIREJAIL_INSTALL_ERROR:-Unknown error}"
+        log_error "Firejail installation failed in NONINTERACTIVE mode: ${FIREJAIL_INSTALL_ERROR:-Unknown error}"
+        return $SANDBOX_STATUS_INSTALL_FAILED
     fi
 
     while true; do
@@ -134,14 +151,14 @@ ensure_sandbox() {
             ""|y|Y)
                 if install_firejail; then
                     export SANDBOX_MODE="firejail"
-                    return 0
+                    return $SANDBOX_STATUS_READY
                 fi
                 local reason="${FIREJAIL_INSTALL_ERROR:-Installation failed}"
-                handle_firejail_failure "$reason"
+                handle_firejail_failure "$reason" "$SANDBOX_STATUS_INSTALL_FAILED"
                 return $?
                 ;;
             n|N)
-                handle_firejail_failure "Firejail installation skipped by user"
+                handle_firejail_failure "Firejail installation skipped by user" "$SANDBOX_STATUS_USER_DECLINED"
                 return $?
                 ;;
             *)
@@ -151,9 +168,13 @@ ensure_sandbox() {
     done
 }
 
-# Legacy wrapper
+# Legacy wrappers
+ensure_sandbox() {
+    verify_firejail_sandbox
+}
+
 check_docker() {
-    ensure_sandbox
+    verify_firejail_sandbox
 }
 
 # ----------------------------------------------------------------------

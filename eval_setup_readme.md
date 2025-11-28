@@ -200,7 +200,7 @@ You can customize the evaluation via environment variables before running the sc
 - `NUM_SAMPLES`: Samples per task (default: `100`)
 - `K_VALUES`: Comma-separated k-values for pass@k metrics (default: `1,10,100`)
 - `OUTPUT_DIR`: Output directory (default: `./humaneval_results`)
-- `SANDBOX_MODE`: Sandbox mode - `docker`, `firejail`, `none`, or empty for auto-detect (default: auto-detect)
+- `SANDBOX_MODE`: Sandbox mode - `firejail`, `none`, or empty for auto-detect (default: auto-detect Firejail)
 - `SKIP_ENV_CHECK`: Set to `1` to bypass Ubuntu 22.04 + H100 environment check
 - `NONINTERACTIVE`: Set to `1` for non-interactive mode (no prompts, auto-start evaluation)
 

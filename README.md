@@ -132,7 +132,7 @@ CHECKPOINT_PATH="Superuser666-Sigil/..."             # Fine-tuned checkpoint
 NUM_SAMPLES=100                                       # Samples per task
 K_VALUES="1,10,100"                                   # Pass@k metrics
 OUTPUT_DIR="./humaneval_results"                     # Output directory
-SANDBOX_MODE="docker"                                # docker, firejail, none
+SANDBOX_MODE="firejail"                              # firejail (default) or none
 SKIP_ENV_CHECK=1                                      # Bypass OS/GPU checks
 NONINTERACTIVE=1                                      # Auto-start evaluation
 ```

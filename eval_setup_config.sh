@@ -26,10 +26,10 @@ export CHECKPOINT_PATH="${CHECKPOINT_PATH:-Superuser666-Sigil/Llama-3.1-8B-Instr
 export OUTPUT_DIR="${OUTPUT_DIR:-./humaneval_results}"
 export NUM_SAMPLES="${NUM_SAMPLES:-100}"
 export K_VALUES="${K_VALUES:-1,10,100}"
-export SANDBOX_MODE="${SANDBOX_MODE:-}"    # Empty = auto-detect, or "docker", "firejail", "none"
+export SANDBOX_MODE="${SANDBOX_MODE:-}"    # Empty = auto-detect Firejail, or "firejail" / "none"
 
-# Docker sandbox configuration
-export DOCKER_IMAGE="${DOCKER_IMAGE:-human-eval-rust-sandbox}"  # Matches human-eval-rust default
+# Legacy Docker sandbox configuration (unused in Firejail-first flow)
+export DOCKER_IMAGE="${DOCKER_IMAGE:-human-eval-rust-sandbox}"
 
 # Reproducibility toggles
 export SKIP_ENV_CHECK="${SKIP_ENV_CHECK:-0}"  # Set to 1 to bypass strict Ubuntu 22.04 + H100 check

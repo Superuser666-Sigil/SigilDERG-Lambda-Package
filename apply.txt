@@ -1,0 +1,566 @@
+-----------------------------------------------------------------------------------------------------------------------------
+NEW GIT DIFF 
+-----------------------------------------------------------------------------------------------------------------------------
+
+ (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
+diff --git a/README.md b/README.md
+index 67c3da473a79266b45b477a20ee5d8ae6554ec83..9794d2e7b1969b1874c817adfc55b0784363a9c2 100644
+--- a/README.md
++++ b/README.md
+@@ -110,50 +110,50 @@ validated together for reproducible evaluation results.
+   imports
+ - **Hard-fail:** Exits immediately on critical errors (missing Rust, failed
+   package installs)
+ - **Sandbox-aware:** Automatically detects and uses Docker or Firejail for code
+   execution isolation
+ - **Persistent:** Runs evaluation in tmux session (survives disconnections)
+ 
+ ## Output Summary
+ 
+ At completion, the script prints:
+ 
+ - Location of logs: `setup.log`, `humaneval_results/**`
+ - Evaluation duration (wall-clock time)
+ - Estimated cost (approximate: wall-time × $3.29/hr for H100 SXM5)
+ 
+ ## Configuration
+ 
+ Customize via environment variables (set before running):
+ 
+ ```bash
+ BASE_MODEL="meta-llama/Meta-Llama-3.1-8B-Instruct"  # Base model
+ CHECKPOINT_PATH="Superuser666-Sigil/..."             # Fine-tuned checkpoint
+ NUM_SAMPLES=100                                       # Samples per task
+ K_VALUES="1,10,100"                                   # Pass@k metrics
+ OUTPUT_DIR="./humaneval_results"                     # Output directory
+-SANDBOX_MODE="docker"                                # docker, firejail, none
++SANDBOX_MODE="firejail"                              # firejail (default) or none
+ SKIP_ENV_CHECK=1                                      # Bypass OS/GPU checks
+ NONINTERACTIVE=1                                      # Auto-start evaluation
+ ```
+ 
+ ## Repository Structure
+ 
+ - **`eval_setup.sh`** - Main entry point and orchestration script
+ - **`eval_setup_config.sh`** - Centralized configuration and constants
+ - **`lib/`** - Modular function libraries (11 focused modules)
+ - **`scripts/evaluate_humaneval.py`** - Standalone Python evaluation script
+ - **`eval_setup_readme.md`** - Detailed technical documentation
+ 
+ ## Related Documentation
+ 
+ - **[Ecosystem Architecture][architecture]** - Complete overview of the
+   SigilDERG ecosystem
+ - **[Evaluation Setup Guide](eval_setup_readme.md)** - Detailed technical
+   documentation
+ 
+ [architecture]: https://github.com/Superuser666-Sigil/SigilDERG-Data_Production/blob/main/ARCHITECTURE.md
+ 
+ ## License
+ 
+ Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
+ 
+EOF
+)
+
+
+-----------------------------------------------------------------------------------------------------------------------------
+NEW GIT DIFF 
+-----------------------------------------------------------------------------------------------------------------------------
+
+ (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
+diff --git a/eval_setup.sh b/eval_setup.sh
+index 206a60e9232153d35a156b15382568fb095c8db9..9c864617bf12d45b0ae83c404934f5d62563f84a 100644
+--- a/eval_setup.sh
++++ b/eval_setup.sh
+@@ -66,66 +66,76 @@ main() {
+     
+     {
+         install_python || ERRORS+=("Python installation")
+     } 2>&1 | tee -a setup.log
+     
+     {
+         setup_venv || ERRORS+=("Virtual environment setup")
+     } 2>&1 | tee -a setup.log
+     
+     {
+         install_pytorch || ERRORS+=("PyTorch installation")
+     } 2>&1 | tee -a setup.log
+     
+     {
+         install_sigilderg_components || ERRORS+=("SigilDERG components")
+     } 2>&1 | tee -a setup.log
+     
+     {
+         install_rust || ERRORS+=("Rust installation (REQUIRED)")
+     } 2>&1 | tee -a setup.log
+     
+     {
+         verify_rust_host || ERRORS+=("Rust host verification")
+     } 2>&1 | tee -a setup.log
+     
+-    # Remove the curly braces {} and use PIPESTATUS to catch the error code
+-    # through the pipe to 'tee'. This prevents 'set -e' from killing the script.
+-    ensure_sandbox 2>&1 | tee -a setup.log
++    # Firejail-first sandbox verification (capture status manually)
++    set +e
++    verify_firejail_sandbox 2>&1 | tee -a setup.log
+     SANDBOX_CHECK_EXIT=${PIPESTATUS[0]}
++    set -e
++
++    case $SANDBOX_CHECK_EXIT in
++        $SANDBOX_STATUS_READY)
++            : # Firejail ready
++            ;;
++        $SANDBOX_STATUS_UNSANDBOXED)
++            WARNINGS+=("Running without sandbox protection (user confirmed UNSANDBOXED mode)")
++            ;;
++        $SANDBOX_STATUS_INSTALL_FAILED)
++            log_error "Firejail installation failed without approval to continue unsandboxed."
++            exit 1
++            ;;
++        $SANDBOX_STATUS_USER_DECLINED)
++            log_error "Sandboxing declined; setup halted per user input."
++            exit 1
++            ;;
++        *)
++            ERRORS+=("Sandbox verification returned unexpected status")
++            ;;
++    esac
+ 
+-    # Check exit code
+-    if [ $SANDBOX_CHECK_EXIT -eq 2 ]; then
+-        log_info ""
+-        log_info "Setup stopped by user request."
+-        exit 1
+-    elif [ $SANDBOX_CHECK_EXIT -ne 0 ]; then
+-        ERRORS+=("Sandbox verification failed")
+-    elif [ "${SANDBOX_MODE:-firejail}" = "none" ]; then
+-        WARNINGS+=("Running without sandbox protection")
+-    fi
+-    
+     {
+         verify_rust_in_sandbox || ERRORS+=("Rust sandbox verification")
+     } 2>&1 | tee -a setup.log
+     
+     {
+         check_tmux || WARNINGS+=("tmux check")
+     } 2>&1 | tee -a setup.log
+     
+     # Install GitHub CLI (run directly to allow interactive auth)
+     log_info "Installing/checking GitHub CLI..."
+     if install_gh 2>&1 | tee -a setup.log; then
+         # Configure git credential helper after successful GitHub CLI authentication
+         log_info "Configuring git credential helper..."
+         git config --global credential.helper store || log_warning "Failed to configure git credential helper"
+         log_success "Git credential helper configured"
+     else
+         WARNINGS+=("GitHub CLI installation/authentication")
+     fi
+     
+     # Install HuggingFace CLI (run directly to allow interactive auth)
+     log_info "Installing/checking HuggingFace CLI..."
+     if ! install_hf_cli 2>&1 | tee -a setup.log; then
+         WARNINGS+=("HuggingFace CLI installation/authentication")
+     fi
+     
+@@ -166,44 +176,33 @@ main() {
+         log_info "NONINTERACTIVE=1 set; automatically starting evaluation in tmux."
+         run_evaluation
+     else
+     # Ask to run evaluation
+     read -p "Run evaluation now? (y/N): " -n 1 -r
+     echo
+     if [[ $REPLY =~ ^[Yy]$ ]]; then
+         run_evaluation
+     else
+         log_info "To run evaluation later:"
+         log_info "  Option 1: Run in tmux (recommended):"
+         log_info "    source $VENV_DIR/bin/activate"
+         log_info "    tmux new-session -d -s sigilderg-eval 'python $VENV_DIR/evaluate_humaneval.py --output-dir $OUTPUT_DIR; bash'"
+         log_info "    tmux attach -t sigilderg-eval"
+         log_info ""
+         log_info "  Option 2: Run directly:"
+         log_info "    source $VENV_DIR/bin/activate"
+         log_info "    python $VENV_DIR/evaluate_humaneval.py --output-dir $OUTPUT_DIR"
+         log_info ""
+         log_info "  Evaluation modes:"
+         log_info "    Script runs BOTH policy and non-policy modes automatically"
+         log_info "    Results organized in: no-policy/ and policy/ sub-folders"
+         log_info "  Optional flags:"
+         log_info "    --policy-only        : Run only policy enforcement mode"
+         log_info "    --no-policy-only     : Run only no-policy mode"
+-        log_info "    --sandbox-mode=docker: Force Docker sandboxing"
+-        log_info "    --sandbox-mode=none  : No sandboxing (UNSAFE, dev only)"
+-        fi
+-    fi
+-}
+-
+-# Run main
+-main "$@"
+-
+-        log_info "    --policy-only        : Run only policy enforcement mode"
+-        log_info "    --no-policy-only     : Run only no-policy mode"
+-        log_info "    --sandbox-mode=docker: Force Docker sandboxing"
+-        log_info "    --sandbox-mode=none  : No sandboxing (UNSAFE, dev only)"
++        log_info "    --sandbox-mode=firejail: Force Firejail sandboxing (default)"
++        log_info "    --sandbox-mode=none     : Run UNSANDBOXED (unsafe, requires confirmation)"
+         fi
+     fi
+ }
+ 
+ # Run main
+ main "$@"
+ 
+EOF
+)
+
+-----------------------------------------------------------------------------------------------------------------------------
+NEW GIT DIFF 
+-----------------------------------------------------------------------------------------------------------------------------
+
+ (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
+diff --git a/eval_setup_config.sh b/eval_setup_config.sh
+index c1dc730d91564aafed36c0d30cea08492816b5ed..545aa0e3528550dc714b54e53505ff1d9b2bbf0f 100644
+--- a/eval_setup_config.sh
++++ b/eval_setup_config.sh
+@@ -4,37 +4,37 @@
+ # Configuration and constants for HumanEval Rust evaluation setup.
+ #
+ # This file contains all configuration variables and constants used by
+ # the evaluation setup scripts. Source this file first before other modules.
+ # Provides centralized configuration including colors, paths, versions, and
+ # environment variable defaults.
+ #
+ # Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
+ # Version: 1.3.8
+ 
+ # Colors for output
+ export RED='\033[0;31m'
+ export GREEN='\033[0;32m'
+ export YELLOW='\033[1;33m'
+ export BLUE='\033[0;34m'
+ export NC='\033[0m' # No Color
+ 
+ # Configuration
+ export PYTHON_VERSION="${PYTHON_VERSION:-3.12.11}"
+ export VENV_DIR="${VENV_DIR:-$HOME/.venvs/sigilderg-humaneval}"
+ export BASE_MODEL="${BASE_MODEL:-meta-llama/Meta-Llama-3.1-8B-Instruct}"
+ export CHECKPOINT_PATH="${CHECKPOINT_PATH:-Superuser666-Sigil/Llama-3.1-8B-Instruct-Rust-QLora/checkpoint-9000}"
+ export OUTPUT_DIR="${OUTPUT_DIR:-./humaneval_results}"
+ export NUM_SAMPLES="${NUM_SAMPLES:-100}"
+ export K_VALUES="${K_VALUES:-1,10,100}"
+-export SANDBOX_MODE="${SANDBOX_MODE:-}"    # Empty = auto-detect, or "docker", "firejail", "none"
++export SANDBOX_MODE="${SANDBOX_MODE:-}"    # Empty = auto-detect Firejail, or "firejail" / "none"
+ 
+-# Docker sandbox configuration
+-export DOCKER_IMAGE="${DOCKER_IMAGE:-human-eval-rust-sandbox}"  # Matches human-eval-rust default
++# Legacy Docker sandbox configuration (unused in Firejail-first flow)
++export DOCKER_IMAGE="${DOCKER_IMAGE:-human-eval-rust-sandbox}"
+ 
+ # Reproducibility toggles
+ export SKIP_ENV_CHECK="${SKIP_ENV_CHECK:-0}"  # Set to 1 to bypass strict Ubuntu 22.04 + H100 check
+ export NONINTERACTIVE="${NONINTERACTIVE:-0}"  # Set to 1 for CI/non-interactive runs (no prompts)
+ 
+ # Note: Script now runs BOTH policy and non-policy modes automatically
+ # Results are organized in sub-folders: no-policy/ and policy/
+ 
+ 
+EOF
+)
+
+-----------------------------------------------------------------------------------------------------------------------------
+NEW GIT DIFF 
+-----------------------------------------------------------------------------------------------------------------------------
+
+ (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
+diff --git a/eval_setup_readme.md b/eval_setup_readme.md
+index cee9fb7203f8ab17b58dfad3c9de3218ae935f9c..767120023a12b7740e43ca7afcac1527d6a00db0 100644
+--- a/eval_setup_readme.md
++++ b/eval_setup_readme.md
+@@ -178,43 +178,43 @@ This script is deliberately **opinionated** and **narrowly targeted**. The desig
+ ---
+ 
+ ## How to use it (quick start)
+ 
+ From a fresh Ubuntu 22.04 + H100 machine:
+ 
+ ```bash
+ chmod +x eval_setup.sh
+ 
+ # Strict, non-interactive run (e.g., CI / repro):
+ NONINTERACTIVE=1 ./eval_setup.sh
+ 
+ # Or interactive run (prompts + optional auth):
+ ./eval_setup.sh
+ ```
+ 
+ ### Configuration options
+ 
+ You can customize the evaluation via environment variables before running the script:
+ 
+ - `BASE_MODEL`: Base model path (default: `meta-llama/Meta-Llama-3.1-8B-Instruct`)
+ - `CHECKPOINT_PATH`: Fine-tuned checkpoint path (default: `Superuser666-Sigil/Llama-3.1-8B-Instruct-Rust-QLora/checkpoint-9000`)
+ - `NUM_SAMPLES`: Samples per task (default: `100`)
+ - `K_VALUES`: Comma-separated k-values for pass@k metrics (default: `1,10,100`)
+ - `OUTPUT_DIR`: Output directory (default: `./humaneval_results`)
+-- `SANDBOX_MODE`: Sandbox mode - `docker`, `firejail`, `none`, or empty for auto-detect (default: auto-detect)
++- `SANDBOX_MODE`: Sandbox mode - `firejail`, `none`, or empty for auto-detect (default: auto-detect Firejail)
+ - `SKIP_ENV_CHECK`: Set to `1` to bypass Ubuntu 22.04 + H100 environment check
+ - `NONINTERACTIVE`: Set to `1` for non-interactive mode (no prompts, auto-start evaluation)
+ 
+ The generated evaluation script also supports additional CLI arguments (see script help with `--help`).
+ 
+ ### Output structure
+ 
+ After setup completes, results will be in:
+ 
+ - `./humaneval_results/no-policy/` - No-policy mode results:
+   - `base_model_samples.jsonl` - Generated samples from base model
+   - `finetuned_model_samples.jsonl` - Generated samples from fine-tuned model
+   - `metrics.json` - Machine-readable metrics for both models
+   - `comparison_report.md` - Human-readable comparison report
+ - `./humaneval_results/policy/` - Policy-enforced mode results (same structure as above)
+ - `./humaneval_results/combined_summary.md` - Combined summary comparing both modes
+ - `./humaneval_results/eval_metadata.json` - Complete environment and configuration metadata
+ 
+EOF
+)
+
+-----------------------------------------------------------------------------------------------------------------------------
+NEW GIT DIFF 
+-----------------------------------------------------------------------------------------------------------------------------
+
+ (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
+diff --git a/lib/sandbox.sh b/lib/sandbox.sh
+index c6067faad4a032b7f115d7229ab182778922abff..8f2611d932d23b0bb428355becfa407ec3983105 100644
+--- a/lib/sandbox.sh
++++ b/lib/sandbox.sh
+@@ -1,180 +1,201 @@
+ #!/bin/bash
+ # lib/sandbox.sh
+ #
+ # Firejail sandbox verification and fallback handling.
+ # Optimized for Ubuntu 22.04 LTS.
+ #
+ # Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
+ # Version: 1.4.1
+ 
+ # Source dependencies
+ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ # Ensure these files exist before sourcing to prevent crash
+ [ -f "$SCRIPT_DIR/eval_setup_config.sh" ] && source "$SCRIPT_DIR/eval_setup_config.sh"
+ [ -f "$SCRIPT_DIR/lib/logging.sh" ] && source "$SCRIPT_DIR/lib/logging.sh" || { echo "CRITICAL: logging.sh not found"; exit 1; }
+ [ -f "$SCRIPT_DIR/lib/environment.sh" ] && source "$SCRIPT_DIR/lib/environment.sh"
+ 
++# Status codes for Firejail verification
++SANDBOX_STATUS_READY=0
++SANDBOX_STATUS_INSTALL_FAILED=1
++SANDBOX_STATUS_USER_DECLINED=2
++SANDBOX_STATUS_UNSANDBOXED=3
++
+ # ----------------------------------------------------------------------
+ # Install Firejail
+ # ----------------------------------------------------------------------
+ install_firejail() {
+     FIREJAIL_INSTALL_ERROR=""
+     log_info "Installing Firejail..."
+ 
+     if ! command_exists apt-get; then
+         FIREJAIL_INSTALL_ERROR="apt-get not available; Firejail installation requires apt-get."
+         log_error "$FIREJAIL_INSTALL_ERROR"
+         return 1
+     fi
+ 
+     local install_output
+     if ! install_output=$(sudo apt-get update && sudo apt-get install -y firejail 2>&1); then
+         FIREJAIL_INSTALL_ERROR="$install_output"
+         log_error "Firejail installation failed with error:"
+         echo "$install_output"
+         return 1
+     fi
+ 
+     if command_exists firejail; then
+         FIREJAIL_VERSION=$(firejail --version | head -1)
+         log_success "Firejail installed: $FIREJAIL_VERSION"
+         return 0
+     else
+         FIREJAIL_INSTALL_ERROR="Firejail binary not found after installation."
+         log_error "$FIREJAIL_INSTALL_ERROR"
+         return 1
+     fi
+ }
+ 
+ # ----------------------------------------------------------------------
+ # Prompt user after Firejail installation failure
+ # ----------------------------------------------------------------------
+ confirm_unsandboxed() {
+     log_error "WARNING: Running without a sandbox executes arbitrary code as ${USER}."
+     read -p "Type 'YES' to proceed unsandboxed: " confirm
+ 
+     if [ "$confirm" == "YES" ]; then
+         export SANDBOX_MODE="none"
+         log_warning "Proceeding without sandbox protection."
+-        return 0
++        return $SANDBOX_STATUS_UNSANDBOXED
+     fi
+ 
+     log_info "Unsandboxed execution not confirmed."
+-    return 1
++    return $SANDBOX_STATUS_USER_DECLINED
+ }
+ 
+ # ----------------------------------------------------------------------
+ # Handle Firejail installation failures in interactive mode
+ # ----------------------------------------------------------------------
+ handle_firejail_failure() {
+     local reason="$1"
++    local decline_status="${2:-$SANDBOX_STATUS_INSTALL_FAILED}"
+ 
+     while true; do
+-        log_error "Firejail installation failed: ${reason}"
++        log_error "Firejail unavailable: ${reason}"
+ 
+         if [ -n "${FIREJAIL_INSTALL_ERROR:-}" ]; then
+             log_error "Error detail:"
+             echo "${FIREJAIL_INSTALL_ERROR}"
+         fi
+ 
+         log_error "Options:"
+         log_error "  [r] Retry installation"
+         log_error "  [u] Proceed UNSANDBOXED (DANGEROUS - Code runs as ${USER})"
+         log_error "  [a] Abort"
+ 
+         read -p "Selection [r/u/a]: " choice
+         case $choice in
+             r|R)
+                 if install_firejail; then
+                     export SANDBOX_MODE="firejail"
+-                    return 0
++                    return $SANDBOX_STATUS_READY
+                 fi
+                 reason="${FIREJAIL_INSTALL_ERROR:-Installation failed again}"
+                 ;;
+             u|U)
+-                if confirm_unsandboxed; then
+-                    return 0
++                local confirm_status
++                confirm_unsandboxed
++                confirm_status=$?
++                if [ "$confirm_status" -eq $SANDBOX_STATUS_UNSANDBOXED ]; then
++                    return $SANDBOX_STATUS_UNSANDBOXED
+                 fi
+                 ;;
+             a|A)
+-                return 2
++                return "$decline_status"
+                 ;;
+             *)
+                 echo "Invalid option."
+                 ;;
+         esac
+     done
+ }
+ 
+ # ----------------------------------------------------------------------
+ # Ensure Firejail sandbox availability
+ # ----------------------------------------------------------------------
+-ensure_sandbox() {
+-    log_info "Checking Firejail sandbox environment..."
++verify_firejail_sandbox() {
++    log_info "Verifying Firejail sandbox (preferred)."
++
++    if [ "${SANDBOX_MODE:-}" = "none" ]; then
++        export SANDBOX_MODE="none"
++        log_warning "SANDBOX_MODE=none provided; running UNSANDBOXED. This is unsafe."
++        return $SANDBOX_STATUS_UNSANDBOXED
++    fi
+ 
+     if command_exists firejail; then
+         FIREJAIL_VERSION=$(firejail --version | head -1)
+         log_success "Firejail available: $FIREJAIL_VERSION"
+         export SANDBOX_MODE="firejail"
+-        return 0
++        return $SANDBOX_STATUS_READY
+     fi
+ 
+     if [ "${NONINTERACTIVE:-0}" = "1" ]; then
+         log_info "Firejail not detected; attempting installation in NONINTERACTIVE mode."
+         if install_firejail; then
+             export SANDBOX_MODE="firejail"
+-            return 0
++            return $SANDBOX_STATUS_READY
+         fi
+-        error_exit "Firejail installation failed in NONINTERACTIVE mode: ${FIREJAIL_INSTALL_ERROR:-Unknown error}"
++        log_error "Firejail installation failed in NONINTERACTIVE mode: ${FIREJAIL_INSTALL_ERROR:-Unknown error}"
++        return $SANDBOX_STATUS_INSTALL_FAILED
+     fi
+ 
+     while true; do
+         read -p "Firejail not found. Install now? (Y/n): " choice
+         case $choice in
+             ""|y|Y)
+                 if install_firejail; then
+                     export SANDBOX_MODE="firejail"
+-                    return 0
++                    return $SANDBOX_STATUS_READY
+                 fi
+                 local reason="${FIREJAIL_INSTALL_ERROR:-Installation failed}"
+-                handle_firejail_failure "$reason"
++                handle_firejail_failure "$reason" "$SANDBOX_STATUS_INSTALL_FAILED"
+                 return $?
+                 ;;
+             n|N)
+-                handle_firejail_failure "Firejail installation skipped by user"
++                handle_firejail_failure "Firejail installation skipped by user" "$SANDBOX_STATUS_USER_DECLINED"
+                 return $?
+                 ;;
+             *)
+                 echo "Please answer 'y' or 'n'."
+                 ;;
+         esac
+     done
+ }
+ 
+-# Legacy wrapper
++# Legacy wrappers
++ensure_sandbox() {
++    verify_firejail_sandbox
++}
++
+ check_docker() {
+-    ensure_sandbox
++    verify_firejail_sandbox
+ }
+ 
+ # ----------------------------------------------------------------------
+ # Verify Rust in Sandbox
+ # ----------------------------------------------------------------------
+ verify_rust_in_sandbox() {
+     log_info "Verifying Rust toolchain in mode: ${SANDBOX_MODE:-unknown}"
+ 
+     case "${SANDBOX_MODE:-firejail}" in
+         firejail)
+             if ! firejail --quiet rustc --version >/dev/null 2>&1; then
+                 error_exit "Rust not found (Firejail mode checks host Rust)"
+             fi
+             ;;
+         none)
+             if ! command -v rustc >/dev/null 2>&1; then
+                 error_exit "Rust not installed on host."
+             fi
+             ;;
+         *)
+             error_exit "Unknown sandbox mode: ${SANDBOX_MODE}"
+             ;;
+     esac
+ }
+ 
+EOF
+)
+
+-----------------------------------------------------------------------------------------------------------------------------
+NEW GIT DIFF 
+-----------------------------------------------------------------------------------------------------------------------------
+
+
