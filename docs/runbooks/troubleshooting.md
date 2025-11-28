@@ -148,9 +148,9 @@ python evaluate_humaneval.py --n-workers 12
 1. Force reinstall ecosystem packages:
 ```bash
 pip install --force-reinstall --no-cache-dir \
-    "human-eval-rust>=2.1.0" \
-    "sigil-pipeline>=2.2.0" \
-    "sigilderg-finetuner>=2.9.0"
+    "human-eval-rust>=2.3.0" \
+    "sigil-pipeline>=2.3.0" \
+    "sigilderg-finetuner>=3.0.0"
 ```
 
 2. Check installed versions:

@@ -1,4 +1,4 @@
-# SigilDERG Lambda Package
+# SigilDERG Lambda Package v2.5.0
 
 ## Overview
 
@@ -55,9 +55,9 @@ missing dependencies**. It:
 
 ### Installs SigilDERG Ecosystem
 
-- **sigil-pipeline** >= 2.2.0 (from PyPI, GitHub fallback)
-- **sigilderg-finetuner** >= 2.9.0 (from PyPI, GitHub fallback)
-- **human-eval-rust** >= 2.1.0 (from PyPI, GitHub fallback)
+- **sigil-pipeline** >= 2.3.0 (from PyPI, GitHub fallback)
+- **sigilderg-finetuner** >= 3.0.0 (from PyPI, GitHub fallback)
+- **human-eval-rust** >= 2.3.0 (from PyPI, GitHub fallback)
 - Core ML dependencies (transformers, accelerate, peft, bitsandbytes, etc.)
 
 ### Runs Evaluation
@@ -91,9 +91,9 @@ components:
 
 | Component | Minimum Version | Purpose |
 | --- | --- | --- |
-| **sigil-pipeline** | >= 2.2.0 | Rust code dataset generation |
-| **sigilderg-finetuner** | >= 2.9.0 | QLoRA fine-tuning on Rust code |
-| **human-eval-rust** | >= 2.1.0 | HumanEval-Rust evaluation harness |
+| **sigil-pipeline** | >= 2.3.0 | Rust code dataset generation |
+| **sigilderg-finetuner** | >= 3.0.0 | QLoRA fine-tuning on Rust code |
+| **human-eval-rust** | >= 2.3.0 | HumanEval-Rust evaluation harness |
 
 **Architecture:** See
 [SigilDERG Ecosystem Architecture](https://github.com/Superuser666-Sigil/SigilDERG-Data_Production/blob/main/ARCHITECTURE.md)

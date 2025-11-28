@@ -186,7 +186,7 @@ verify_rust_in_sandbox() {
     case "${SANDBOX_MODE:-firejail}" in
         firejail)
             # Firejail restricts access to home directory by default.
-            # We need to whitelist ~/.cargo and preserve PATH to access rustc.
+            # We use --whitelist to explicitly allow access to cargo/rustup directories.
             # First, ensure PATH includes cargo bin directory
             if [ -f "$HOME/.cargo/env" ]; then
                 . "$HOME/.cargo/env" 2>/dev/null || true
@@ -203,36 +203,56 @@ verify_rust_in_sandbox() {
                 error_exit "Rust not found on host. Run install_rust first."
             fi
             
+            # Set up environment for Firejail to find Rust
+            CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
+            RUSTUP_HOME="${RUSTUP_HOME:-$HOME/.rustup}"
+            
             # Firejail configuration to allow access to Rust toolchain:
-            # --whitelist: Allow read access to ~/.cargo directory (needed for rustc, cargo, and toolchain)
-            # --env=PATH: Preserve PATH environment variable so rustc can be found
+            # --whitelist: Allow access to cargo directory (binaries, registry, config)
+            # --whitelist: Allow access to rustup directory (toolchains, stdlib)
+            # --read-only: System libraries for linking
             # --quiet: Suppress Firejail startup messages
-            # Use full path to rustc for reliability
-            # Try multiple Firejail configurations for compatibility with different versions
             RUST_VERIFIED=false
             
-            # Method 1: Whitelist cargo directory + preserve PATH (most secure, works with newer Firejail)
-            # This allows Firejail to access ~/.cargo/bin/rustc while maintaining security
+            # Method 1: Whitelist cargo + rustup directories (recommended, matches sandbox.py)
             if firejail --quiet \
-                --whitelist="$HOME/.cargo" \
-                --env=PATH \
+                --whitelist="$CARGO_HOME" \
+                --whitelist="$RUSTUP_HOME" \
+                --read-only=/usr \
+                --read-only=/lib \
+                --read-only=/lib64 \
                 "$RUSTC_PATH" --version >/dev/null 2>&1; then
                 RUST_VERIFIED=true
-            # Method 2: Just preserve PATH (fallback - may work if cargo is in system PATH or symlinked)
-            elif firejail --quiet --env=PATH rustc --version >/dev/null 2>&1; then
+                log_info "Rust verified with whitelist method"
+            # Method 2: Legacy whitelist (older Firejail versions)
+            elif firejail --quiet \
+                --whitelist="$HOME/.cargo" \
+                --whitelist="$HOME/.rustup" \
+                "$RUSTC_PATH" --version >/dev/null 2>&1; then
                 RUST_VERIFIED=true
+                log_info "Rust verified with legacy whitelist method"
+            # Method 3: noblacklist fallback (least secure but may work on restrictive systems)
+            elif firejail --quiet \
+                --noblacklist="$HOME/.cargo" \
+                --noblacklist="$HOME/.rustup" \
+                "$RUSTC_PATH" --version >/dev/null 2>&1; then
+                RUST_VERIFIED=true
+                log_warning "Rust verified with noblacklist method (less secure)"
             fi
             
             if [ "$RUST_VERIFIED" = "false" ]; then
                 log_error "Rust not accessible in Firejail sandbox."
                 log_error "Rust path: $RUSTC_PATH"
+                log_error "CARGO_HOME: $CARGO_HOME"
+                log_error "RUSTUP_HOME: $RUSTUP_HOME"
                 log_error "Firejail version: $(firejail --version 2>/dev/null | head -1 || echo 'unknown')"
                 log_error ""
                 log_error "This is typically caused by Firejail restricting access to ~/.cargo."
                 log_error "Solutions:"
-                log_error "  1. Update Firejail: sudo apt-get install --upgrade firejail"
-                log_error "  2. Check Firejail supports --whitelist option"
-                log_error "  3. Run without sandbox (DANGEROUS): SANDBOX_MODE=none"
+                log_error "  1. Ensure CARGO_HOME and RUSTUP_HOME are set correctly"
+                log_error "  2. Update Firejail: sudo apt-get install --upgrade firejail"
+                log_error "  3. Check Firejail supports --whitelist option"
+                log_error "  4. Run without sandbox (DANGEROUS): SANDBOX_MODE=none"
                 error_exit "Rust verification failed in Firejail sandbox. See troubleshooting guide."
             fi
             
@@ -242,6 +262,7 @@ verify_rust_in_sandbox() {
             if ! command -v rustc >/dev/null 2>&1; then
                 error_exit "Rust not installed on host."
             fi
+            log_success "Rust verified (no sandbox)"
             ;;
         *)
             error_exit "Unknown sandbox mode: ${SANDBOX_MODE}"

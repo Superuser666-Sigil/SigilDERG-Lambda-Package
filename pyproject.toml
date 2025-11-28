@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sigilderg-lambda-package"
-version = "2.0.0"
+version = "2.5.0"
 description = "Reproducible HumanEval-Rust evaluation pipeline for SigilDERG ecosystem"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -29,7 +29,7 @@ dependencies = [
     "peft>=0.12.0",
     "jsonlines>=4.0.0",
     "numpy>=1.24.0",
-    "human-eval-rust>=2.1.0",
+    "human-eval-rust>=2.3.0",
 ]
 
 [project.optional-dependencies]

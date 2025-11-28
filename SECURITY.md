@@ -14,10 +14,21 @@ All code execution uses [Firejail](https://firejail.wordpress.com/) by default.
 Firejail provides:
 
 - **Process isolation** - Separate namespaces for PID, network, mount
-- **Filesystem restrictions** - Read-only mounts, private /tmp
+- **Filesystem restrictions** - Read-only mounts, private /tmp, whitelisted Rust toolchain
 - **Network isolation** - No network access by default
 - **Resource limits** - Memory, CPU, fork bomb prevention
 - **seccomp filtering** - Blocks dangerous system calls
+
+**Rust Toolchain Access:**
+
+The sandbox uses `--whitelist` instead of `--private` to allow access to the Rust
+toolchain while maintaining security:
+
+- `--whitelist=$HOME/.cargo` - Cargo binaries and registry cache
+- `--whitelist=$HOME/.rustup` - Rustup toolchain installations
+
+This approach allows `rustc` and `cargo` to function within the sandbox while
+blocking access to all other home directory contents.
 
 ### Unsandboxed Mode
 

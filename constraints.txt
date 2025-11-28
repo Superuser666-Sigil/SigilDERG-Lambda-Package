@@ -1,0 +1,97 @@
+# SigilDERG Ecosystem Unified Constraints
+# ========================================
+# This file ensures compatible dependency versions across:
+#   - sigil-pipeline
+#   - sigilderg-finetuner  
+#   - human-eval-rust
+#
+# Usage: pip install -c constraints.txt <package>
+# Generated: 2025-11-28
+# Version: 1.0.0
+#
+# These constraints resolve the following conflicts:
+# 1. psutil: sigil-pipeline requires <7.0.0, finetuner has no upper bound
+# 2. rich: sigil-pipeline requires <14.0.0, finetuner requires >=13.0.0
+# 3. torch: Must match torchaudio version exactly (2.7.1 for CUDA 12.8)
+#
+# IMPORTANT: When PyTorch is installed from special indexes (cu128, cu124, cpu),
+# install it BEFORE using these constraints, then install other packages with constraints.
+
+# =============================================================================
+# CORE SHARED DEPENDENCIES (intersection of all ecosystem requirements)
+# =============================================================================
+
+# Rich console output - compatible with both pipeline (<14.0.0) and finetuner (>=13.0.0)
+rich>=13.7.0,<14.0.0
+
+# System monitoring - compatible with pipeline (<7.0.0) and human-eval-rust (>=5.9.0)
+psutil>=6.1.1,<7.0.0
+
+# Terminal colors - ecosystem standard
+termcolor>=3.2.0
+
+# =============================================================================
+# PYTORCH ECOSYSTEM (pinned for torchaudio compatibility)
+# =============================================================================
+# NOTE: Install PyTorch FIRST with the appropriate CUDA index before other packages.
+# These constraints ensure subsequent installs don't upgrade PyTorch.
+#
+# For CUDA 12.8+:
+#   pip install torch==2.7.1+cu128 torchvision==0.22.1+cu128 torchaudio==2.7.1+cu128 \
+#       --index-url https://download.pytorch.org/whl/cu128
+#
+# For CUDA 12.4:
+#   pip install torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 \
+#       --index-url https://download.pytorch.org/whl/cu124
+#
+# For CPU only:
+#   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+
+# Pin minimum versions to prevent accidental downgrades
+# The actual version is determined by the PyTorch install step
+torch>=2.4.0
+torchvision>=0.19.0
+torchaudio>=2.4.0
+
+# =============================================================================
+# ML/TRANSFORMERS STACK (shared across finetuner and pipeline)
+# =============================================================================
+transformers>=4.44.0
+accelerate>=0.33.0
+peft>=0.12.0
+bitsandbytes>=0.43.1
+huggingface-hub>=0.24.0
+datasets>=2.20.0
+
+# Evaluation and training
+trl>=0.9.6
+evaluate>=0.4.2
+
+# =============================================================================
+# DATA PROCESSING
+# =============================================================================
+numpy>=1.24.0,<2.0.0
+pandas>=2.0.0
+scikit-learn>=1.3.0
+jsonlines>=4.0.0
+pyyaml>=6.0
+
+# =============================================================================
+# UTILITIES (compatible across ecosystem)
+# =============================================================================
+tqdm>=4.66.0,<5.0.0
+pydantic>=2.5.0,<3.0.0
+typer>=0.9.0
+click>=8.1.0,<9.0.0
+
+# =============================================================================
+# NETWORKING AND ASYNC
+# =============================================================================
+requests>=2.31.0,<3.0.0
+aiohttp>=3.9.0,<4.0.0
+httpx>=0.25.0,<1.0.0
+
+# =============================================================================
+# PROTOBUF (required by transformers, pinned to avoid breaking changes)
+# =============================================================================
+protobuf>=3.20.0,<5.0.0

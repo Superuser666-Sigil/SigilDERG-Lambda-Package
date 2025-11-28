@@ -26,10 +26,45 @@ We implement **multi-layer reproducibility guarantees**:
 
 - Python version pinned to 3.12.11 via pyenv
 - Ecosystem packages have minimum version requirements:
-  - `human-eval-rust >= 2.1.0`
-  - `sigil-pipeline >= 2.2.0`
-  - `sigilderg-finetuner >= 2.9.0`
+  - `human-eval-rust >= 2.3.0`
+  - `sigil-pipeline >= 2.3.0`
+  - `sigilderg-finetuner >= 3.0.0`
 - PyTorch version selected based on detected CUDA version
+- **Unified constraints file** (`constraints.txt`) ensures compatible versions across all packages:
+  - Shared dependencies pinned to intersection of compatible ranges
+  - Prevents pip dependency resolver from upgrading shared packages to incompatible versions
+  - Used with `pip install -c constraints.txt` flag
+
+### 1.1 Dependency Constraint Strategy
+
+The ecosystem packages have overlapping dependency requirements that can conflict:
+
+| Package | `rich` constraint | `psutil` constraint |
+|---------|-------------------|---------------------|
+| sigil-pipeline | `<14.0.0` | `<7.0.0` |
+| sigilderg-finetuner | `>=13.7.0,<14.0.0` | `>=6.1.1,<7.0.0` |
+
+The `constraints.txt` file captures the intersection:
+```
+rich>=13.7.0,<14.0.0
+psutil>=6.1.1,<7.0.0
+torch>=2.4.0
+```
+
+Installation uses: `pip install -c constraints.txt package1 package2 ...`
+
+### 1.2 pip-tools Lockfile Generation
+
+For fully reproducible builds, use `pip-tools` to generate a lockfile:
+
+```bash
+pip install pip-tools
+pip-compile requirements.in -o requirements.lock
+pip install -r requirements.lock
+```
+
+The `requirements.in` file lists all ecosystem packages with their constraints.
+The generated `requirements.lock` contains exact versions of all transitive dependencies.
 
 ### 2. Environment Validation
 
