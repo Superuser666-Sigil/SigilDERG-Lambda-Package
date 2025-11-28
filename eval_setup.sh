@@ -88,10 +88,8 @@ main() {
         verify_rust_host || ERRORS+=("Rust host verification")
     } 2>&1 | tee -a setup.log
     
-    # --- FIX: Proper Exit Code Capture ---
-    # We remove the subshell block {} to avoid variable scoping issues.
-    # We use PIPESTATUS to get the exit code of check_docker_with_verification
-    # even though it is piped to tee.
+    # Remove the curly braces {} and use PIPESTATUS to catch the error code
+    # through the pipe to 'tee'. This prevents 'set -e' from killing the script.
     check_docker_with_verification 2>&1 | tee -a setup.log
     DOCKER_CHECK_EXIT=${PIPESTATUS[0]}
     
