@@ -9,17 +9,16 @@ modes automatically. Supports batched generation with Flash Attention v2 optimiz
 Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
 Version: 2.0.0
 """
+import argparse
+import json
 import os
-import sys
 import platform
-import subprocess
 import random
 import shutil
-from pathlib import Path
+import subprocess
+import sys
 from datetime import datetime
-
-import json
-import argparse
+from pathlib import Path
 
 # Lazy imports for heavy dependencies (torch, transformers, etc.)
 # These are only imported when actually needed for model operations
@@ -36,13 +35,13 @@ def _ensure_heavy_imports():
     """Lazily import heavy dependencies when needed."""
     global numpy, torch, jsonlines, transformers, peft, human_eval_data, human_eval_evaluation
     if torch is None:
+        import jsonlines as _jsonlines
         import numpy as np
         import torch as _torch
-        import jsonlines as _jsonlines
-        from transformers import AutoTokenizer, AutoModelForCausalLM
-        from peft import AutoPeftModelForCausalLM, PeftConfig, PeftModel
         from human_eval import data as _human_eval_data
         from human_eval import evaluation as _human_eval_evaluation
+        from peft import AutoPeftModelForCausalLM, PeftConfig, PeftModel
+        from transformers import AutoModelForCausalLM, AutoTokenizer
 
         numpy = np
         torch = _torch
@@ -705,9 +704,10 @@ def _filter_bad_samples(sample_file: str) -> str:
     Ensures at least one sample per problem remains to satisfy evaluation requirements.
     Returns path to filtered sample file.
     """
-    import jsonlines
     import tempfile
     from collections import defaultdict
+
+    import jsonlines
 
     filtered_count = 0
     total_count = 0
