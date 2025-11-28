@@ -88,17 +88,18 @@ main() {
         verify_rust_host || ERRORS+=("Rust host verification")
     } 2>&1 | tee -a setup.log
     
-    DOCKER_CHECK_EXIT=0
-    {
-        check_docker_with_verification
-        DOCKER_CHECK_EXIT=$?
-    } 2>&1 | tee -a setup.log
+    # --- FIX: Proper Exit Code Capture ---
+    # We remove the subshell block {} to avoid variable scoping issues.
+    # We use PIPESTATUS to get the exit code of check_docker_with_verification
+    # even though it is piped to tee.
+    check_docker_with_verification 2>&1 | tee -a setup.log
+    DOCKER_CHECK_EXIT=${PIPESTATUS[0]}
     
-    # Check exit code after the subshell completes
+    # Check exit code
     if [ $DOCKER_CHECK_EXIT -eq 2 ]; then
-        # Exit code 2 means user chose to stop (option 3)
+        # Exit code 2 means user chose to stop (option 3) or permission denied fatal
         log_info ""
-        log_info "Setup stopped by user request."
+        log_info "Setup stopped by user request or critical permission error."
         log_info "Fix Docker permissions and re-run the script when ready."
         exit 1
     elif [ $DOCKER_CHECK_EXIT -ne 0 ]; then

@@ -5,7 +5,7 @@
 # Optimized for Ubuntu 22.04 LTS.
 #
 # Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
-# Version: 1.4.0
+# Version: 1.4.1
 
 # Source dependencies
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -106,7 +106,11 @@ verify_docker_access() {
         return 0
     else
         EXIT_CODE=$?
-        ERROR_MSG=$(docker ps 2>&1)
+        
+        # --- FIX APPLIED HERE ---
+        # We append '|| true' to prevent 'set -e' from killing the script
+        # when $(docker ps) returns a failure code.
+        ERROR_MSG=$(timeout 10 docker ps 2>&1 || true)
         
         if [[ "$ERROR_MSG" == *"permission denied"* ]] || [[ "$ERROR_MSG" == *"connect to the Docker daemon socket"* ]]; then
              log_error "Permission denied accessing Docker socket."
