@@ -185,9 +185,58 @@ verify_rust_in_sandbox() {
 
     case "${SANDBOX_MODE:-firejail}" in
         firejail)
-            if ! firejail --quiet rustc --version >/dev/null 2>&1; then
-                error_exit "Rust not found (Firejail mode checks host Rust)"
+            # Firejail restricts access to home directory by default.
+            # We need to whitelist ~/.cargo and preserve PATH to access rustc.
+            # First, ensure PATH includes cargo bin directory
+            if [ -f "$HOME/.cargo/env" ]; then
+                . "$HOME/.cargo/env" 2>/dev/null || true
             fi
+            
+            # Get the full path to rustc if available
+            RUSTC_PATH=$(command -v rustc 2>/dev/null || echo "")
+            
+            if [ -z "$RUSTC_PATH" ] && [ -f "$HOME/.cargo/bin/rustc" ]; then
+                RUSTC_PATH="$HOME/.cargo/bin/rustc"
+            fi
+            
+            if [ -z "$RUSTC_PATH" ]; then
+                error_exit "Rust not found on host. Run install_rust first."
+            fi
+            
+            # Firejail configuration to allow access to Rust toolchain:
+            # --whitelist: Allow read access to ~/.cargo directory (needed for rustc, cargo, and toolchain)
+            # --env=PATH: Preserve PATH environment variable so rustc can be found
+            # --quiet: Suppress Firejail startup messages
+            # Use full path to rustc for reliability
+            # Try multiple Firejail configurations for compatibility with different versions
+            RUST_VERIFIED=false
+            
+            # Method 1: Whitelist cargo directory + preserve PATH (most secure, works with newer Firejail)
+            # This allows Firejail to access ~/.cargo/bin/rustc while maintaining security
+            if firejail --quiet \
+                --whitelist="$HOME/.cargo" \
+                --env=PATH \
+                "$RUSTC_PATH" --version >/dev/null 2>&1; then
+                RUST_VERIFIED=true
+            # Method 2: Just preserve PATH (fallback - may work if cargo is in system PATH or symlinked)
+            elif firejail --quiet --env=PATH rustc --version >/dev/null 2>&1; then
+                RUST_VERIFIED=true
+            fi
+            
+            if [ "$RUST_VERIFIED" = "false" ]; then
+                log_error "Rust not accessible in Firejail sandbox."
+                log_error "Rust path: $RUSTC_PATH"
+                log_error "Firejail version: $(firejail --version 2>/dev/null | head -1 || echo 'unknown')"
+                log_error ""
+                log_error "This is typically caused by Firejail restricting access to ~/.cargo."
+                log_error "Solutions:"
+                log_error "  1. Update Firejail: sudo apt-get install --upgrade firejail"
+                log_error "  2. Check Firejail supports --whitelist option"
+                log_error "  3. Run without sandbox (DANGEROUS): SANDBOX_MODE=none"
+                error_exit "Rust verification failed in Firejail sandbox. See troubleshooting guide."
+            fi
+            
+            log_success "Rust verified in Firejail sandbox"
             ;;
         none)
             if ! command -v rustc >/dev/null 2>&1; then

@@ -31,6 +31,43 @@ sudo apt-get install -y firejail
 SANDBOX_MODE=none ./eval_setup.sh
 ```
 
+### Rust Not Found in Firejail Sandbox
+
+**Symptom:** "Rust not found (Firejail mode checks host Rust)" or "Rust not accessible in Firejail sandbox"
+
+**Cause:** Firejail restricts access to the home directory by default, so it cannot access `~/.cargo/bin/rustc` where Rust is typically installed.
+
+**Solutions:**
+
+1. **Automatic Fix (Recommended):** The setup script now automatically configures Firejail to allow access to `~/.cargo` using `--whitelist` and preserves the PATH environment variable. This should work automatically.
+
+2. **Manual Verification:** If the automatic fix doesn't work, verify Rust is installed:
+```bash
+# Check if rustc is available
+rustc --version
+
+# If not, source cargo environment
+source ~/.cargo/env
+rustc --version
+```
+
+3. **Check Firejail Version:** Older Firejail versions may not support `--whitelist`. Update Firejail:
+```bash
+sudo apt-get update
+sudo apt-get install --upgrade firejail
+```
+
+4. **Alternative:** If Firejail configuration continues to fail, you can run without sandboxing (DANGEROUS for untrusted code):
+```bash
+SANDBOX_MODE=none ./eval_setup.sh
+```
+
+**Technical Details:**
+- Rust installs to `~/.cargo/bin/` by default
+- Firejail restricts home directory access for security
+- The fix uses `firejail --whitelist="$HOME/.cargo" --env=PATH` to allow access
+- This preserves security while enabling Rust toolchain access
+
 ### HuggingFace Authentication Failed
 
 **Symptom:** "Repository not found" or "Access denied" for Llama models

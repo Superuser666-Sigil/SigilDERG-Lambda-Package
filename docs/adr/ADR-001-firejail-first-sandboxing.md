@@ -40,6 +40,13 @@ The sandbox provides:
 - Resource limits (memory, CPU, fork bombs)
 - seccomp filtering for dangerous syscalls
 
+**Rust Toolchain Access:** Firejail restricts access to the home directory by default, which prevents access to `~/.cargo/bin/rustc` where Rust is typically installed. To allow Rust toolchain access while maintaining security, we use:
+- `--whitelist="$HOME/.cargo"` to allow read access to the cargo directory
+- `--env=PATH` to preserve the PATH environment variable
+- Full path to `rustc` for reliability
+
+This configuration allows `rustc` and `cargo` to execute within the sandbox while maintaining isolation for other home directory contents.
+
 ## Consequences
 
 ### Positive
