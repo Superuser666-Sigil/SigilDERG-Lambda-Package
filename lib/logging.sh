@@ -8,7 +8,7 @@
 # use colors defined in eval_setup_config.sh for visual clarity.
 #
 # Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
-# Version: 1.3.8
+# Version: 2.0.0
 
 # Source config for colors (if not already sourced)
 if [ -z "${RED:-}" ]; then

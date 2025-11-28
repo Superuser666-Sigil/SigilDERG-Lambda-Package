@@ -14,7 +14,7 @@
 # Defaults optimized for 1×H100 with 26 vCPUs (overridable via CLI flags)
 #
 # Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
-# Version: 1.3.8
+# Version: 2.0.0
 
 set -euo pipefail  # Exit on error, undefined vars, pipe failures
 

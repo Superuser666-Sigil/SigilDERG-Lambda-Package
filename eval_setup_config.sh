@@ -9,7 +9,7 @@
 # environment variable defaults.
 #
 # Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
-# Version: 1.3.8
+# Version: 2.0.0
 
 # Colors for output
 export RED='\033[0;31m'

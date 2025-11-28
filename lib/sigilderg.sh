@@ -5,16 +5,26 @@
 #
 # Installs core dependencies, human-eval-rust, sigil-pipeline, and sigilderg-finetuner
 # with PyPI fallback to GitHub for reliability. Validates package versions and import
-# functionality to ensure correct installation. Requires human-eval-rust>=2.0.0.
+# functionality to ensure correct installation.
+#
+# Required minimum versions:
+#   - human-eval-rust >= 2.1.0
+#   - sigil-pipeline >= 2.1.0
+#   - sigilderg-finetuner >= 2.9.0
 #
 # Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
-# Version: 1.3.8
+# Version: 2.0.0
 
 # Source dependencies
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$SCRIPT_DIR/eval_setup_config.sh"
 source "$SCRIPT_DIR/lib/logging.sh"
 source "$SCRIPT_DIR/lib/python_env.sh"
+
+# Minimum version requirements for ecosystem components
+MIN_HUMAN_EVAL_RUST_VERSION="2.1.0"
+MIN_SIGIL_PIPELINE_VERSION="2.1.0"
+MIN_SIGILDERG_FINETUNER_VERSION="2.9.0"
 
 # Install SigilDERG components
 install_sigilderg_components() {
@@ -47,12 +57,13 @@ install_sigilderg_components() {
     log_success "jsonlines installed"
     
     # Install human-eval-rust (with fallback to GitHub if PyPI not available or has syntax errors)
-    log_info "Installing human-eval-rust (requires >=2.0.0 for Firejail-first sandboxing, enhanced prompt format, result schema, compile rate tracking, main-free rate tracking, rustc preflight checks, never-dropping completions, and bug fixes)..."
+    log_info "Installing human-eval-rust (requires >=${MIN_HUMAN_EVAL_RUST_VERSION})..."
+    log_info "Features: Firejail-first sandboxing, enhanced prompt format, result schema,"
+    log_info "          compile rate tracking, main-free rate tracking, rustc preflight checks"
     # Uninstall old version first to ensure clean install
     "$PIP_CMD" uninstall -y human-eval-rust 2>/dev/null || true
-    # Force reinstall with version constraint to get H100 optimizations and fixes (1.3.8+)
     PYPI_INSTALL_SUCCESS=false
-    if "$PIP_CMD" install --force-reinstall --no-cache-dir "human-eval-rust>=2.0.0" 2>&1 | tee -a setup.log; then
+    if "$PIP_CMD" install --force-reinstall --no-cache-dir "human-eval-rust>=${MIN_HUMAN_EVAL_RUST_VERSION}" 2>&1 | tee -a setup.log; then
         PYPI_INSTALL_SUCCESS=true
         # Small delay to ensure package metadata is fully written
         sleep 2
@@ -64,43 +75,13 @@ install_sigilderg_components() {
             "$PIP_CMD" uninstall -y human-eval-rust 2>/dev/null || true
             PYPI_INSTALL_SUCCESS=false
         else
-            # Verify installation by checking version (more reliable than import check)
-            # Try multiple methods to get version
-            # First try: Python import (suppress stderr to avoid capturing syntax errors)
-            PYTHON_VERSION_OUTPUT=$("$VENV_DIR/bin/python" -c "import human_eval; print(getattr(human_eval, '__version__', 'unknown'))" 2>/dev/null || echo "unknown")
-            # Filter out error messages - only accept strings that look like version numbers
-            if [[ "$PYTHON_VERSION_OUTPUT" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\+)?$ ]]; then
-                INSTALLED_VERSION="$PYTHON_VERSION_OUTPUT"
-            else
-                INSTALLED_VERSION="unknown"
-            fi
-            # If that failed, try checking pip show
-            if [[ "$INSTALLED_VERSION" == "unknown" ]] || [[ -z "$INSTALLED_VERSION" ]]; then
-                PIP_VERSION=$("$PIP_CMD" show human-eval-rust 2>/dev/null | grep "^Version:" | awk '{print $2}' || echo "unknown")
-                if [[ "$PIP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\+)?$ ]]; then
-                    INSTALLED_VERSION="$PIP_VERSION"
-                fi
-            fi
-            # If still unknown, check if import works at all
-            if [[ "$INSTALLED_VERSION" == "unknown" ]] || [[ -z "$INSTALLED_VERSION" ]]; then
-                if "$VENV_DIR/bin/python" -c "import human_eval" 2>/dev/null; then
-                    # Import works, version might just not be accessible, assume it's the installed version
-                    INSTALLED_VERSION="1.3.8+"
-                    log_info "Package imports successfully, assuming version >=1.3.8 from PyPI"
-                fi
-            fi
-            
+            # Verify installation by checking version
+            INSTALLED_VERSION=$(_get_package_version "human_eval" "human-eval-rust")
             if [[ "$INSTALLED_VERSION" != "unknown" ]] && [[ -n "$INSTALLED_VERSION" ]]; then
                 log_success "human-eval-rust installed from PyPI (version: $INSTALLED_VERSION)"
-                # Verify it's the correct version (allow 1.3.8+ format)
-                if [[ "$INSTALLED_VERSION" != "1.3.8" ]] && [[ "$INSTALLED_VERSION" != "1.3.8+" ]] && [[ ! "$INSTALLED_VERSION" =~ ^1\.3\.[8-9] ]]; then
-                    log_warning "Installed version $INSTALLED_VERSION may not have the latest fixes (expected >=1.3.8)"
-                fi
             else
-                # Version check failed, but PyPI install succeeded - likely just a version detection issue
-                log_warning "PyPI package installed successfully but version check inconclusive"
-                    log_info "Assuming version >=1.3.8 from PyPI installation (package installed successfully)"
-                    log_success "human-eval-rust installed from PyPI (version check inconclusive, but installation succeeded)"
+                log_warning "PyPI package installed but version check inconclusive"
+                log_success "human-eval-rust installed from PyPI (installation succeeded)"
             fi
         fi
     fi
@@ -118,37 +99,18 @@ install_sigilderg_components() {
             error_exit "GitHub installation also has syntax/import errors. Please check the human-eval-Rust repository."
         fi
         
-        # Verify GitHub installation version
-        PYTHON_VERSION_OUTPUT=$("$VENV_DIR/bin/python" -c "import human_eval; print(getattr(human_eval, '__version__', 'unknown'))" 2>/dev/null || echo "unknown")
-        # Filter out error messages - only accept strings that look like version numbers
-        if [[ "$PYTHON_VERSION_OUTPUT" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\+)?$ ]]; then
-            GITHUB_VERSION="$PYTHON_VERSION_OUTPUT"
-        else
-            GITHUB_VERSION="unknown"
-        fi
-        if [[ "$GITHUB_VERSION" == "unknown" ]] || [[ -z "$GITHUB_VERSION" ]]; then
-            PIP_VERSION=$("$PIP_CMD" show human-eval-rust 2>/dev/null | grep "^Version:" | awk '{print $2}' || echo "unknown")
-            if [[ "$PIP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\+)?$ ]]; then
-                GITHUB_VERSION="$PIP_VERSION"
-            fi
-        fi
-        if [[ "$GITHUB_VERSION" != "1.3.8" ]] && [[ "$GITHUB_VERSION" != "unknown" ]] && [[ -n "$GITHUB_VERSION" ]]; then
-            log_warning "GitHub installation version $GITHUB_VERSION does not match expected 1.3.8"
-            log_warning "This may indicate the GitHub main branch is not up to date. Consider using PyPI version 1.3.8+"
-        fi
+        GITHUB_VERSION=$(_get_package_version "human_eval" "human-eval-rust")
         log_success "human-eval-rust installed from GitHub (version: ${GITHUB_VERSION:-unknown})"
-        # Note: termcolor>=3.2.0 is already installed in core dependencies and is compatible across all ecosystem components
     fi
     
     # Install sigil-pipeline (with fallback to GitHub if PyPI not available)
-    log_info "Installing sigil-pipeline (requires >=1.2.1 for termcolor compatibility)..."
+    log_info "Installing sigil-pipeline (requires >=${MIN_SIGIL_PIPELINE_VERSION})..."
     # Uninstall old version first to ensure clean install
     "$PIP_CMD" uninstall -y sigil-pipeline 2>/dev/null || true
-    # Force reinstall with version constraint for termcolor compatibility (1.2.1+)
-    if "$PIP_CMD" install --force-reinstall --no-cache-dir "sigil-pipeline>=1.2.1" 2>&1 | tee -a setup.log; then
+    if "$PIP_CMD" install --force-reinstall --no-cache-dir "sigil-pipeline>=${MIN_SIGIL_PIPELINE_VERSION}" 2>&1 | tee -a setup.log; then
         # Verify installation succeeded
         if "$VENV_DIR/bin/python" -c "import sigil_pipeline" 2>/dev/null; then
-            INSTALLED_VERSION=$("$VENV_DIR/bin/python" -c "import sigil_pipeline; print(getattr(sigil_pipeline, '__version__', 'unknown'))" 2>/dev/null || echo "unknown")
+            INSTALLED_VERSION=$(_get_package_version "sigil_pipeline" "sigil-pipeline")
             log_success "sigil-pipeline installed from PyPI (version: $INSTALLED_VERSION)"
         else
             log_warning "PyPI package installed but import failed, trying GitHub fallback..."
@@ -165,12 +127,12 @@ install_sigilderg_components() {
     fi
     
     # Install sigilderg-finetuner (with fallback to GitHub if PyPI not available)
-    log_info "Installing sigilderg-finetuner..."
-    # Force upgrade and clear cache to get latest version
-    if "$PIP_CMD" install --upgrade --no-cache-dir sigilderg-finetuner 2>&1 | tee -a setup.log; then
+    log_info "Installing sigilderg-finetuner (requires >=${MIN_SIGILDERG_FINETUNER_VERSION})..."
+    "$PIP_CMD" uninstall -y sigilderg-finetuner 2>/dev/null || true
+    if "$PIP_CMD" install --force-reinstall --no-cache-dir "sigilderg-finetuner>=${MIN_SIGILDERG_FINETUNER_VERSION}" 2>&1 | tee -a setup.log; then
         # Verify installation succeeded
         if "$VENV_DIR/bin/python" -c "import rust_qlora" 2>/dev/null; then
-            INSTALLED_VERSION=$("$VENV_DIR/bin/python" -c "import rust_qlora; print(getattr(rust_qlora, '__version__', 'unknown'))" 2>/dev/null || echo "unknown")
+            INSTALLED_VERSION=$(_get_package_version "rust_qlora" "sigilderg-finetuner")
             log_success "sigilderg-finetuner installed from PyPI (version: $INSTALLED_VERSION)"
         else
             log_warning "PyPI package installed but import failed, trying GitHub fallback..."
@@ -189,3 +151,27 @@ install_sigilderg_components() {
     log_success "SigilDERG components installed"
 }
 
+# Helper function to get package version
+_get_package_version() {
+    local module_name="$1"
+    local pip_name="$2"
+    
+    # Try Python import first
+    local version
+    version=$("$VENV_DIR/bin/python" -c "import ${module_name}; print(getattr(${module_name}, '__version__', 'unknown'))" 2>/dev/null || echo "unknown")
+    
+    # Filter out error messages - only accept strings that look like version numbers
+    if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        echo "$version"
+        return
+    fi
+    
+    # Fallback to pip show
+    version=$("$PIP_CMD" show "$pip_name" 2>/dev/null | grep "^Version:" | awk '{print $2}' || echo "unknown")
+    if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        echo "$version"
+        return
+    fi
+    
+    echo "unknown"
+}

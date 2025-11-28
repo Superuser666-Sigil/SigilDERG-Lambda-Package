@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-bash:
+    name: Lint Bash Scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Lint bash scripts
+        run: |
+          shellcheck eval_setup.sh eval_setup_config.sh
+          shellcheck lib/*.sh
+
+  lint-python:
+    name: Lint Python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install linting tools
+        run: |
+          pip install black flake8 isort
+
+      - name: Check formatting with black
+        run: black --check scripts/ tests/
+
+      - name: Check imports with isort
+        run: isort --check-only scripts/ tests/
+
+      - name: Lint with flake8
+        run: flake8 scripts/ tests/ --max-line-length=100 --ignore=E501,W503
+
+  test-python:
+    name: Test Python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install pytest pytest-cov pytest-mock
+          pip install numpy jsonlines
+
+      - name: Run tests
+        run: |
+          pytest tests/test_evaluate_humaneval.py -v --tb=short
+
+  test-bash:
+    name: Test Bash (bats)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install bats
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bats
+
+      - name: Run bats tests
+        run: |
+          bats tests/*.bats
+
+  validate-syntax:
+    name: Validate Script Syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate bash syntax
+        run: |
+          for script in eval_setup.sh eval_setup_config.sh lib/*.sh; do
+            bash -n "$script" || exit 1
+            echo "✓ $script"
+          done
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate Python syntax
+        run: |
+          python -m py_compile scripts/evaluate_humaneval.py
+          echo "✓ scripts/evaluate_humaneval.py"
+

@@ -1,7 +1,21 @@
-
 # HumanEval-Rust Evaluation Setup Script
 
 This evaluation harness (`eval_setup.sh` and supporting modules) provides a complete setup and execution pipeline for running the **HumanEval-Rust** benchmark on the SigilDERG Rust QLoRA model and its base model. It's designed as a **reproducible, H100-targeted evaluation pipeline** that Lambda (or any reviewer) can run end-to-end and get directly comparable results.
+
+## Rule Zero: The Guiding Principle
+
+This evaluation package implements the **Rule Zero** approach:
+
+> **"If an output cannot explain itself, it has no trust."**
+
+Every aspect of this pipeline is designed for verifiability:
+
+- **Auditable results**: Complete metadata capture for reproduction
+- **Verifiable outputs**: Compilation + tests + clippy checks
+- **Reproducible process**: Version-pinned dependencies and seeded RNG
+- **Transparent execution**: All logic visible in bash and Python scripts
+
+For details on how Rule Zero applies across the SigilDERG ecosystem, see [Rule Zero Approach](docs/RULE_ZERO_APPROACH.md).
 
 ## Script Structure
 
@@ -67,9 +81,9 @@ At a high level, the script:
 
 5. **Installs the SigilDERG ecosystem and HumanEval-Rust**
 
-   - Installs **`human-eval-rust`** from PyPI with a minimum version of **2.0.0** (required for Firejail-first sandboxing, enhanced prompt format, result schema, compile rate tracking, main-free rate tracking, rustc preflight checks, never-dropping completions, and bug fixes), and verifies the version.
+   - Installs **`human-eval-rust`** from PyPI with a minimum version of **2.1.0** (required for Firejail-first sandboxing, enhanced prompt format, result schema, compile rate tracking, main-free rate tracking, rustc preflight checks, never-dropping completions, and bug fixes), and verifies the version.
      - If PyPI fails or the version is wrong, it falls back to installing directly from the GitHub repo.
-   - Installs **`sigil-pipeline`** (minimum version 1.2.1 for termcolor compatibility) and **`sigilderg-finetuner`** from PyPI first, with GitHub fallbacks if needed.
+   - Installs **`sigil-pipeline`** (minimum version 2.1.0) and **`sigilderg-finetuner`** (minimum version 2.9.0) from PyPI first, with GitHub fallbacks if needed.
    - Verifies that key modules can be imported inside the venv.
 
 6. **Installs Rust and checks toolchain**

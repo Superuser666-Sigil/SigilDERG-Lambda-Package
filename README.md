@@ -55,9 +55,9 @@ missing dependencies**. It:
 
 ### Installs SigilDERG Ecosystem
 
-- **sigil-pipeline** >= 1.2.1 (from PyPI, GitHub fallback)
-- **sigilderg-finetuner** (from PyPI, GitHub fallback)
-- **human-eval-rust** >= 2.0.0 (from PyPI, GitHub fallback)
+- **sigil-pipeline** >= 2.1.0 (from PyPI, GitHub fallback)
+- **sigilderg-finetuner** >= 2.9.0 (from PyPI, GitHub fallback)
+- **human-eval-rust** >= 2.1.0 (from PyPI, GitHub fallback)
 - Core ML dependencies (transformers, accelerate, peft, bitsandbytes, etc.)
 
 ### Runs Evaluation
@@ -91,9 +91,9 @@ components:
 
 | Component | Minimum Version | Purpose |
 | --- | --- | --- |
-| **sigil-pipeline** | >= 1.2.1 | Rust code dataset generation |
-| **sigilderg-finetuner** | latest | QLoRA fine-tuning on Rust code |
-| **human-eval-rust** | >= 2.0.0 | HumanEval-Rust evaluation harness |
+| **sigil-pipeline** | >= 2.1.0 | Rust code dataset generation |
+| **sigilderg-finetuner** | >= 2.9.0 | QLoRA fine-tuning on Rust code |
+| **human-eval-rust** | >= 2.1.0 | HumanEval-Rust evaluation harness |
 
 **Architecture:** See
 [SigilDERG Ecosystem Architecture](https://github.com/Superuser666-Sigil/SigilDERG-Data_Production/blob/main/ARCHITECTURE.md)
@@ -142,15 +142,24 @@ NONINTERACTIVE=1                                      # Auto-start evaluation
 - **`eval_setup.sh`** - Main entry point and orchestration script
 - **`eval_setup_config.sh`** - Centralized configuration and constants
 - **`lib/`** - Modular function libraries (11 focused modules)
-- **`scripts/evaluate_humaneval.py`** - Standalone Python evaluation script
+- **`scripts/`** - Python evaluation and validation scripts
+  - `evaluate_humaneval.py` - HumanEval-Rust evaluation driver
+  - `validate_ecosystem.py` - Ecosystem package validation
+- **`docs/`** - Documentation
+  - `RULE_ZERO_APPROACH.md` - Rule Zero philosophy and implementation
+  - `adr/` - Architecture Decision Records
+  - `runbooks/` - Operational runbooks
+- **`tests/`** - Test suite (bats for bash, pytest for Python)
 - **`eval_setup_readme.md`** - Detailed technical documentation
 
 ## Related Documentation
 
 - **[Ecosystem Architecture][architecture]** - Complete overview of the
   SigilDERG ecosystem
+- **[Rule Zero Approach](docs/RULE_ZERO_APPROACH.md)** - Core philosophy
 - **[Evaluation Setup Guide](eval_setup_readme.md)** - Detailed technical
   documentation
+- **[Security Policy](SECURITY.md)** - Security practices and reporting
 
 [architecture]: https://github.com/Superuser666-Sigil/SigilDERG-Data_Production/blob/main/ARCHITECTURE.md
 

@@ -7,7 +7,7 @@ for both base and fine-tuned models. Runs both no-policy and policy-enforced eva
 modes automatically. Supports batched generation with Flash Attention v2 optimization.
 
 Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
-Version: 1.3.8
+Version: 2.0.0
 """
 import os
 import sys

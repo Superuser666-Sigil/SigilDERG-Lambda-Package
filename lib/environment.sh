@@ -8,7 +8,7 @@
 # and NVIDIA H100 GPU requirements, with optional override via SKIP_ENV_CHECK.
 #
 # Copyright (c) 2025 Dave Tofflemire, SigilDERG Project
-# Version: 1.3.9
+# Version: 2.0.0
 
 # Source dependencies
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
