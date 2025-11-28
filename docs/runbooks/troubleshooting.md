@@ -251,6 +251,30 @@ grep -i error setup.log
 grep -i warning setup.log
 ```
 
+## CI/CD Environment Issues
+
+### Firejail Incompatibility with Containers
+
+**Symptom:** pytest crashes with `TypeError: 'NoneType' object is not callable`
+for `os.chmod`, `os.getcwd`, or `os.unlink` when running in GitHub Actions or
+Docker containers.
+
+**Cause:** Firejail's seccomp filters are incompatible with containerized
+environments. Installing Firejail in GitHub Actions runners corrupts Python's
+`os` module at the C level.
+
+**Solution:** Do NOT install Firejail in CI environments. Tests should mock
+sandbox functionality:
+
+```yaml
+# In CI workflow - DO NOT install firejail
+# Tests use mocks and sandbox_mode="none"
+```
+
+For local development, Firejail works normally on non-containerized Linux.
+
+**Reference:** See [ADR-001](../adr/ADR-001-firejail-first-sandboxing.md).
+
 ## Getting Help
 
 If issues persist:

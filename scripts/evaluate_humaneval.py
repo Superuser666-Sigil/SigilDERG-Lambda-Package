@@ -632,7 +632,7 @@ Mark arguments as mut when you want to sort or mutate them."""
                 current = len(samples)
                 if current % (batch_size * 5) == 0 or current == total_tasks:
                     print(
-                        f"  Generated {current}/{total_tasks} samples ({current/total_tasks*100:.1f}%)"
+                        f"  Generated {current}/{total_tasks} samples ({current / total_tasks * 100:.1f}%)"
                     )
 
     # Validate that all problems have at least one sample
@@ -758,7 +758,7 @@ def _filter_bad_samples(sample_file: str) -> str:
 
     if filtered_count > 0:
         print(
-            f"  Filtered out {filtered_count}/{total_count} obviously bad samples ({filtered_count/total_count*100:.1f}%)"
+            f"  Filtered out {filtered_count}/{total_count} obviously bad samples ({filtered_count / total_count * 100:.1f}%)"
         )
         # Count final samples
         final_count = sum(
@@ -792,9 +792,9 @@ def evaluate_samples(
     # This prevents warnings when forking processes for parallel evaluation
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Evaluating: {sample_file}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"Sandbox mode: {sandbox_mode}")
     if sandbox_mode == "none":
         print("WARNING: Evaluation is running unsandboxed; proceed only if you trust the code.")
@@ -880,12 +880,12 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 """
 
     for metric, value in sorted(base_results.items()):
-        report += f"- **{metric}**: {value:.4f} ({value*100:.2f}%)\n"
+        report += f"- **{metric}**: {value:.4f} ({value * 100:.2f}%)\n"
 
     report += "\n### Fine-tuned Model Performance\n\n"
 
     for metric, value in sorted(finetuned_results.items()):
-        report += f"- **{metric}**: {value:.4f} ({value*100:.2f}%)\n"
+        report += f"- **{metric}**: {value:.4f} ({value * 100:.2f}%)\n"
 
     report += "\n## Improvement Analysis\n\n"
 
@@ -896,8 +896,8 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         improvement_pct = (improvement / base_val * 100) if base_val > 0 else 0
 
         report += f"### {metric}\n"
-        report += f"- Base: {base_val:.4f} ({base_val*100:.2f}%)\n"
-        report += f"- Fine-tuned: {finetuned_val:.4f} ({finetuned_val*100:.2f}%)\n"
+        report += f"- Base: {base_val:.4f} ({base_val * 100:.2f}%)\n"
+        report += f"- Fine-tuned: {finetuned_val:.4f} ({finetuned_val * 100:.2f}%)\n"
         report += f"- **Improvement**: {improvement:+.4f} ({improvement_pct:+.2f}%)\n\n"
 
     with open(report_file, "w", encoding="utf-8") as f:
@@ -929,10 +929,10 @@ def run_evaluation_mode(
     mode_output_dir = output_dir / policy_label
     mode_output_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print(f"Running evaluation with policy enforcement: {enforce_policy}")
     print(f"Results will be saved to: {mode_output_dir}")
-    print(f"{'='*80}\n")
+    print(f"{'=' * 80}\n")
 
     # Store config for JSON output
     config = {
@@ -1185,22 +1185,22 @@ def main():
             if all_results["no-policy"]["base"]:
                 f.write("### Base Model\n")
                 for metric, value in sorted(all_results["no-policy"]["base"].items()):
-                    f.write(f"- **{metric}**: {value:.4f} ({value*100:.2f}%)\n")
+                    f.write(f"- **{metric}**: {value:.4f} ({value * 100:.2f}%)\n")
             if all_results["no-policy"]["finetuned"]:
                 f.write("\n### Fine-tuned Model\n")
                 for metric, value in sorted(all_results["no-policy"]["finetuned"].items()):
-                    f.write(f"- **{metric}**: {value:.4f} ({value*100:.2f}%)\n")
+                    f.write(f"- **{metric}**: {value:.4f} ({value * 100:.2f}%)\n")
 
             if all_results["policy"]:
                 f.write("\n## Policy Enforcement Mode\n\n")
             if all_results["policy"]["base"]:
                 f.write("### Base Model\n")
                 for metric, value in sorted(all_results["policy"]["base"].items()):
-                    f.write(f"- **{metric}**: {value:.4f} ({value*100:.2f}%)\n")
+                    f.write(f"- **{metric}**: {value:.4f} ({value * 100:.2f}%)\n")
             if all_results["policy"]["finetuned"]:
                 f.write("\n### Fine-tuned Model\n")
                 for metric, value in sorted(all_results["policy"]["finetuned"].items()):
-                    f.write(f"- **{metric}**: {value:.4f} ({value*100:.2f}%)\n")
+                    f.write(f"- **{metric}**: {value:.4f} ({value * 100:.2f}%)\n")
 
         print(f"\n✓ Combined summary saved to: {summary_file}")
 
